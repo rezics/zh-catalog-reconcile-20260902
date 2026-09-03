@@ -232,16 +232,12 @@ function repairMergeTargetUnitId(
 		: proposal;
 }
 
-function proposalDecision(
+function buildProposalDecision(
 	config: RunConfig,
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
 	promptRevision: string,
 ): SourceDecision {
-	const repairedProposal = repairNearMissTitleCitations(
-		packet,
-		repairMergeTargetUnitId(packet, proposal),
-	);
 	const citations: DecisionEvidenceCitation[] = [];
 	const citationIndexes = new Map<string, number>();
 	const linkCitations = (claimCitations: readonly DecisionEvidenceCitation[]): number[] => [
@@ -257,7 +253,7 @@ function proposalDecision(
 			}),
 		),
 	];
-	const { note, ...proposalFields } = repairedProposal;
+	const { note, ...proposalFields } = proposal;
 	const semanticFields =
 		proposalFields.disposition === "review"
 			? {
@@ -294,6 +290,47 @@ function proposalDecision(
 	});
 	validateDecisionAgainstPacket(config, packet, decision);
 	return decision;
+}
+
+function countBits(value: number): number {
+	let remaining = value;
+	let count = 0;
+	while (remaining > 0) {
+		count += remaining & 1;
+		remaining >>>= 1;
+	}
+	return count;
+}
+
+function proposalDecision(
+	config: RunConfig,
+	packet: ReviewPacket,
+	proposal: DecisionProposal,
+	promptRevision: string,
+): SourceDecision {
+	const repairedProposal = repairNearMissTitleCitations(
+		packet,
+		repairMergeTargetUnitId(packet, proposal),
+	);
+	const candidates: DecisionProposal[] = [repairedProposal];
+	if (repairedProposal.disposition !== "review" && repairedProposal.basis.length > 1) {
+		const fullMask = 2 ** repairedProposal.basis.length - 1;
+		const masks = Array.from({ length: fullMask - 1 }, (_, index) => fullMask - index - 1).sort(
+			(left, right) => countBits(right) - countBits(left),
+		);
+		for (const mask of masks) {
+			const basis = repairedProposal.basis.filter((_, index) => (mask & (1 << index)) !== 0);
+			if (basis.length > 0) candidates.push({ ...repairedProposal, basis });
+		}
+	}
+	let firstError: unknown;
+	for (const candidate of candidates)
+		try {
+			return buildProposalDecision(config, packet, candidate, promptRevision);
+		} catch (error) {
+			firstError ??= error;
+		}
+	throw firstError ?? new Error("Proposal produced no valid basis subset");
 }
 
 export function classifyDecisionWorkerFeedback(error: unknown): DecisionWorkerFeedback {

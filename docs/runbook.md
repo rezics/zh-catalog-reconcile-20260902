@@ -121,10 +121,13 @@ deterministic validator share one basis claim contract for allowed fields and re
 For a keep proposal, the coordinator can restore only the unique equal-length source title selected
 by `booklike_title` and propagate that exact substitution within the proposal. Other title repairs
 require a unique one-character near match. Every repaired proposal still passes the normal validator.
-The validator accepts a strongly matching long synopsis as duplicate proof and permits a
+The validator accepts a matching synopsis excerpt of at least 64 normalized characters as
+duplicate proof and permits a
 non-Book uncertainty to cite contradictory source Book evidence.
 It ignores formatting whitespace in citation excerpts and restores an out-of-packet merge target
 only from exactly one non-source candidate cited by the proposal.
+It may omit invalid redundant basis claims only when the remaining non-empty subset independently
+passes the complete decision validator.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
 Historical `full-online-luna-v2`, `full-online-luna-v3`, `full-online-luna-v4`, and
 `full-online-luna-v5` runs remain

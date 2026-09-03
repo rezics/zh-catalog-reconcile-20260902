@@ -147,7 +147,8 @@ prompt revision. A keep proposal's unique equal-length source title may be resto
 evidence and its exact substitution propagated within the proposal; other title repairs require a
 unique one-character near match. Do not repair other fields or ambiguous titles. Use
 whitespace-insensitive citation matching. An out-of-packet merge target may be restored only from
-exactly one non-source packet candidate cited by its basis. Workers use ChatGPT login with standard
+exactly one non-source packet candidate cited by its basis. Omit an invalid redundant basis only
+when a remaining non-empty basis subset passes the complete validator. Workers use ChatGPT login with standard
 (non-Fast) service and never redeem an
 account reset. Exhausted allowance is a resumable stop requiring operator action.
 `work` rejects a run that is not pinned to the current worker protocol before it captures or

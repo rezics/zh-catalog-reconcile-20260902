@@ -88,9 +88,9 @@ role and field type required by that code, and every citation must be used. In p
 
 - `keep` requires `booklike_title` plus at least one of `synopsis_describes_work`,
   `author_attribution_present`, or `identifier_present`;
-- `merge` requires `same_identifier`, an explicitly stated `title_variant_same_work`, a strongly
-  matching long `same_synopsis` excerpt, matching synopsis and attribution, or title
-  correspondence plus corroboration;
+- `merge` requires `same_identifier`, an explicitly stated `title_variant_same_work`, a matching
+  `same_synopsis` excerpt of at least 64 normalized characters, matching synopsis and attribution,
+  or title correspondence plus corroboration;
 - `soft_delete` requires the basis corresponding to its reason code;
 - `revise` requires metadata- or attribution-correction evidence matching its reason and patches;
 - `review` uses typed `uncertainties` linked to source and related-candidate citations instead of
@@ -102,6 +102,8 @@ shows why a query-like title cannot safely determine Book status.
 Whitespace inserted by stored formatting is ignored for citation matching. A merge target outside
 the packet may be restored only when its basis citations name exactly one non-source packet
 candidate; ordinary merge-target and claim validation still runs afterward.
+An invalid redundant basis may be omitted only when a remaining non-empty basis subset passes the
+complete disposition, Unit-role, field, citation, and patch validation contract.
 
 `distinct_candidate_evidence` is an optional `keep` basis, not a routine keep requirement. Use it
 only when stored identity evidence supports a distinct-work comparison. Its claim-local citations

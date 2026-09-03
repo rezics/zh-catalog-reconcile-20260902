@@ -57,15 +57,6 @@ function initializeWorkerRun(
 	return initializeRun({ ...input, workerProtocol: CurrentLunaWorkerProtocol });
 }
 
-function captureError(operation: () => unknown): unknown {
-	try {
-		operation();
-	} catch (error) {
-		return error;
-	}
-	throw new Error("Expected operation to throw");
-}
-
 test("worker output schema uses the supported closed-object structured-output subset", () => {
 	const schema = z.toJSONSchema(DecisionProposalBatchSchema, {
 		target: "draft-2020-12",
@@ -445,6 +436,39 @@ test("proposal compilation restores a uniquely cited merge target", async () => 
 	}
 });
 
+test("proposal compilation drops an invalid redundant basis only when the remainder validates", async () => {
+	const runId = `proposal-redundant-basis-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "完整作品");
+		const packet = buildReviewPacket(config, 0, "完整作品", [source], []);
+		const withInvalidRedundantBasis = proposal(source);
+		if (withInvalidRedundantBasis.disposition !== "keep")
+			throw new Error("Fixture proposal must be keep");
+		withInvalidRedundantBasis.basis.push({
+			code: "author_attribution_present",
+			citations: [{ unitId: source.id, field: "attribution", excerpt: "不存在的作者" }],
+		});
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[withInvalidRedundantBasis],
+		);
+		if (decision?.disposition !== "keep") throw new Error("Expected keep decision");
+		expect(decision.basis.map(({ code }) => code)).toEqual([
+			"booklike_title",
+			"synopsis_describes_work",
+		]);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("matching synopsis and attribution can prove a merge when stored titles differ", async () => {
 	const runId = `proposal-content-author-merge-${Date.now()}`;
 	const directory = runDirectory(runId);
@@ -819,27 +843,28 @@ test("distinct candidate evidence requires source and non-source candidate citat
 		});
 
 		const missingCandidate = withDistinctBasis([sourceTitle, sourceSummary]);
-		expect(
-			classifyDecisionWorkerFeedback(
-				captureError(() => compileDecisionProposals(config, [item], [missingCandidate])),
-			),
-		).toEqual({
-			category: "basis_invalid",
-			issue: "distinct_candidate_missing_non_source_candidate",
-		});
+		const [withoutCandidateClaim] = compileDecisionProposals(config, [item], [missingCandidate]);
+		expect(withoutCandidateClaim?.disposition).toBe("keep");
+		if (withoutCandidateClaim?.disposition === "keep")
+			expect(
+				withoutCandidateClaim.basis.some(({ code }) => code === "distinct_candidate_evidence"),
+			).toBeFalse();
 
 		const missingSource = withDistinctBasis([candidateTitle, candidateTitle]);
-		expect(
-			classifyDecisionWorkerFeedback(
-				captureError(() => compileDecisionProposals(config, [item], [missingSource])),
-			),
-		).toEqual({
-			category: "basis_invalid",
-			issue: "distinct_candidate_missing_source",
-		});
+		const [withoutSourceClaim] = compileDecisionProposals(config, [item], [missingSource]);
+		expect(withoutSourceClaim?.disposition).toBe("keep");
+		if (withoutSourceClaim?.disposition === "keep")
+			expect(
+				withoutSourceClaim.basis.some(({ code }) => code === "distinct_candidate_evidence"),
+			).toBeFalse();
 
 		const valid = withDistinctBasis([sourceTitle, candidateTitle]);
-		expect(compileDecisionProposals(config, [item], [valid])).toHaveLength(1);
+		const [withValidClaim] = compileDecisionProposals(config, [item], [valid]);
+		expect(withValidClaim?.disposition).toBe("keep");
+		if (withValidClaim?.disposition === "keep")
+			expect(
+				withValidClaim.basis.some(({ code }) => code === "distinct_candidate_evidence"),
+			).toBeTrue();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -937,27 +962,22 @@ test("coordinator gives semantic validation feedback to a retry", async () => {
 							const invalidProposal = structuredClone(validProposal);
 							if (invalidProposal.disposition !== "keep")
 								throw new Error("Fixture proposal must be keep");
-							const distinctBasis = invalidProposal.basis.find(
-								({ code }) => code === "distinct_candidate_evidence",
+							const titleBasis = invalidProposal.basis.find(
+								({ code }) => code === "booklike_title",
 							);
-							if (!distinctBasis) throw new Error("Fixture distinct-candidate basis is missing");
-							distinctBasis.citations = [
+							if (!titleBasis) throw new Error("Fixture title basis is missing");
+							titleBasis.citations = [
 								{
 									unitId: source.id,
 									field: "localization_title",
-									excerpt: "反馈作品",
-								},
-								{
-									unitId: source.id,
-									field: "localization_summary",
-									excerpt: "一部具有完整人物与情节设定的小说。",
+									excerpt: "不存在的标题",
 								},
 							];
 							return [invalidProposal];
 						}
 						expect(options?.feedback).toEqual({
-							category: "basis_invalid",
-							issue: "distinct_candidate_missing_non_source_candidate",
+							category: "citation_invalid",
+							issue: "citation_contract",
 						});
 						return [validProposal];
 					},

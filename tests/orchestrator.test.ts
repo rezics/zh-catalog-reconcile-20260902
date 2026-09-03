@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -16,6 +16,7 @@ import {
 	HistoricalLunaWorkerProtocolV2,
 	HistoricalLunaWorkerProtocolV3,
 	HistoricalLunaWorkerProtocolV4,
+	HistoricalLunaWorkerProtocolV5,
 	PacketCheckpointSchema,
 	SchemaVersion,
 	SourceDecisionSchema,
@@ -91,7 +92,7 @@ test("worker output schema uses the supported closed-object structured-output su
 });
 
 test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
-	expect(LunaPromptRevision).toBe("full-online-luna-v5");
+	expect(LunaPromptRevision).toBe("full-online-luna-v6");
 	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
 	expect(arguments_).toContain("--ignore-user-config");
 	expect(arguments_).toContain("fast_mode");
@@ -727,7 +728,7 @@ test("coordinator rejects a run without the current worker protocol before captu
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v6");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -755,7 +756,7 @@ test("coordinator keeps historical v2 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v6");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -783,7 +784,7 @@ test("coordinator keeps historical v3 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v6");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -811,7 +812,35 @@ test("coordinator keeps historical v4 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v6");
+		expect(nextCalled).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("coordinator keeps historical v5 runs readable but refuses to resume them", async () => {
+	const runId = `work-historical-v5-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+			workerProtocol: HistoricalLunaWorkerProtocolV5,
+		});
+		expect(config.workerProtocol).toEqual(HistoricalLunaWorkerProtocolV5);
+		let nextCalled = false;
+		await expect(
+			runConcurrentReconciliation(config, {
+				dependencies: {
+					next: async () => {
+						nextCalled = true;
+						return [];
+					},
+				},
+			}),
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v6");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -831,6 +860,42 @@ test("orchestration lock rejects a second coordinator", async () => {
 		await withFileLock(lockPath, async () => {
 			await expect(runConcurrentReconciliation(config)).rejects.toThrow("Could not acquire lock");
 		});
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("file lock recovers a lock owned by a dead process", async () => {
+	const runId = `work-stale-lock-${Date.now()}`;
+	const directory = runDirectory(runId);
+	const lockPath = join(directory, ".work", "orchestrator.lock");
+	try {
+		await mkdir(join(directory, ".work"), { recursive: true });
+		await writeFile(lockPath, "99999999 2026-09-03T00:00:00.000Z\n", "utf8");
+		let ran = false;
+		await withFileLock(lockPath, async () => {
+			ran = true;
+		});
+		expect(ran).toBeTrue();
+		expect(await pathExists(lockPath)).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("JSONL reader preserves Unicode line and paragraph separators inside JSON strings", async () => {
+	const runId = `jsonl-unicode-separator-${Date.now()}`;
+	const directory = runDirectory(runId);
+	const path = join(directory, "unicode.jsonl");
+	const schema = z.object({ value: z.string() });
+	try {
+		await writeJsonLinesAtomic(path, [
+			{ value: "before\u2028after" },
+			{ value: "before\u2029after" },
+		]);
+		const values = [];
+		for await (const value of readJsonLines(path, schema)) values.push(value);
+		expect(values).toEqual([{ value: "before\u2028after" }, { value: "before\u2029after" }]);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -960,9 +1025,25 @@ test("pipeline triages routine keeps and sends only fallback sources to the full
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
 		});
-		const sources = Array.from({ length: 4 }, (_, index) =>
-			sourceBook(randomUUID(), `流水作品${index}`),
-		).sort((left, right) => left.id.localeCompare(right.id));
+		const sources = Array.from({ length: 4 }, (_, index) => {
+			const source = sourceBook(randomUUID(), `流水作品${index}`);
+			const { evidenceHash: _evidenceHash, ...unhashed } = source;
+			const withAuthor = {
+				...unhashed,
+				attributions: [
+					{
+						id: randomUUID(),
+						role: "author",
+						creditedUnitId: randomUUID(),
+						creditedUnitKind: "entity",
+						entityKind: "person",
+						entityVerified: false,
+						localizations: [{ language: "zh", title: `作者${index}`, summary: null }],
+					},
+				],
+			};
+			return BookEvidenceSchema.parse({ ...withAuthor, evidenceHash: sha256(withAuthor) });
+		}).sort((left, right) => left.id.localeCompare(right.id));
 		const packets = sources.map((source) => buildReviewPacket(config, 0, source.id, [source], []));
 		await writeJsonLinesAtomic(join(directory, "packets", partFileName(0)), packets);
 		const lastSource = sources.at(-1);
@@ -992,7 +1073,12 @@ test("pipeline triages routine keeps and sends only fallback sources to the full
 						return items.flatMap(({ undecidedSourceUnitIds }) =>
 							undecidedSourceUnitIds.map((sourceUnitId) => ({
 								sourceUnitId,
-								routineKeep: routineIds.has(sourceUnitId),
+								confidence: routineIds.has(sourceUnitId) ? ("high" as const) : ("low" as const),
+								disposition: routineIds.has(sourceUnitId) ? ("keep" as const) : ("review" as const),
+								reason: routineIds.has(sourceUnitId)
+									? ("distinct_work" as const)
+									: ("insufficient_evidence" as const),
+								targetUnitId: null,
 							})),
 						);
 					},
@@ -1023,7 +1109,7 @@ test("pipeline triages routine keeps and sends only fallback sources to the full
 			actorRevisions.set(decision.sourceUnitId, decision.actor.promptRevision);
 		for (const source of sources)
 			expect(actorRevisions.get(source.id)).toBe(
-				routineIds.has(source.id) ? "full-online-luna-v5-triage" : "full-online-luna-v5",
+				routineIds.has(source.id) ? "full-online-luna-v6-triage" : "full-online-luna-v6",
 			);
 	} finally {
 		await rm(directory, { recursive: true, force: true });

@@ -13,9 +13,9 @@ This `PLAN.md` is the repository's single authoritative work plan. The repositor
 architecture, decision policy, decision template, and runbook are supporting contracts and
 procedures; they are not separate plans.
 
-The current replacement execution is `full-online-luna-v5-20260904`: a fresh run from the
+The current replacement execution is `full-online-luna-v6-20260904`: a fresh run from the
 beginning with REZICS reference `v1.7.0`, cutoff `2026-09-02T16:00:00.000Z`, page size 256,
-`evidence-claims-v3`, and the `full-online-luna-v5` worker protocol. It must use no source-start
+`evidence-claims-v3`, and the `full-online-luna-v6` worker protocol. It must use no source-start
 cursor and no `--after-run`. Initialize it only if that run ID does not already exist; otherwise,
 verify the persisted configuration before resuming. The exact guarded commands are maintained in
 [`docs/runbook.md`](./docs/runbook.md).
@@ -32,6 +32,9 @@ Preserve historical artifacts but never resume or use them to skip source ranges
 - `full-online-luna-v4-20260904` recorded 128 decisions and captured 192 packets before its
   32-by-2 single-part execution was stopped for throughput remediation. Its artifacts remain
   audit-only and must not be resumed.
+- `full-online-luna-v5-20260904` recorded 4,864 decisions and captured 5,888 packets while
+  validating the first pipelined triage design. Its measured 307–311 decisions/minute missed the
+  five-hour threshold, so its artifacts remain audit-only and must not be resumed.
 
 Run until the fixed-cutoff population has exact decision coverage, unless the operator stops it or
 a safety, quality, connection, or allowance failure requires a resumable stop. Completion ends at
@@ -66,7 +69,7 @@ online from REZICS; do not retrieve external metadata or copy the complete catal
   Runs without that field are interpreted as `legacy-v1`; `evidence-grounded-v2` and `legacy-v1`
   runs remain available for audit but cannot be resumed or used to generate a manifest. Start a
   new run rather than rewriting their JSONL.
-- Require a full Luna run to pin the `full-online-luna-v5` worker protocol in `run.json`. Runs that
+- Require a full Luna run to pin the `full-online-luna-v6` worker protocol in `run.json`. Runs that
   omit it, or pin another model, prompt, or proposal protocol, cannot start `work`; preserve them
   and initialize a fresh full run rather than mixing decision actors.
 - Require `evidenceMode: "online-batched"`. Legacy runs without this field are incompatible and
@@ -228,8 +231,8 @@ growth, and decision backlog. Pause capture when these exceed the approved opera
 For the current task, online batches keep database work bounded and eliminate the unnecessary
 complete local catalog copy.
 
-Decision execution keeps at most four packet parts (1,024 sources maximum at the selected page,
-50 candidates per packet) active in memory. Recording checks only the affected part. `audit` is an optional streaming O(N) pass
+Decision execution keeps at most eight packet parts (2,048 sources maximum at the selected page,
+20 candidates per packet) active in memory. Recording checks only the affected part. `audit` is an optional streaming O(N) pass
 with fixed-size counters and at most 100 sampled issues; manifest generation performs the same
 quality aggregation while already streaming decisions, not as a second pass. At 500,000,000 or
 3,000,000,000 sources, audit and manifest work partition by packet-part range and aggregate their
@@ -237,7 +240,7 @@ fixed-size summaries alongside the packet-storage sharding described above.
 
 The model no longer repeats natural-language explanations, source Unit IDs, and cited titles in
 the same field. Full-run workers attach exact citations directly to each typed basis or uncertainty;
-the coordinator deduplicates those citations and derives the persisted citation indexes. The v5
+the coordinator deduplicates those citations and derives the persisted citation indexes. The v6
 prompt renders the same basis claim contract used by deterministic validation, including required
 source, target, and non-source-candidate roles. Retries receive bounded typed categories and issue
 codes rather than raw validation messages or Unit IDs. Query-fragment contradictions receive a
@@ -246,8 +249,11 @@ present. This makes unlinked worker citations
 structurally impossible while keeping routine output bounded and preserving the full immutable
 packet and exact citation excerpts for audit.
 
+Validated decisions completed before another worker in the same part exhausts retries are appended
+before the run fails, so a resume does not recompute successful semantic work.
+
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
-decision request, 20 packets per conservative triage request, and four active packet parts. The
+decision request, five packets per guarded classification request, and eight active packet parts. The
 operator's execution host is a Fedora Threadripper 3970X with
 32 cores / 64 threads and 64 GB RAM; the separate database host has 16 cores and 64 GB RAM. These
 are operator-provided specifications, not measured utilization. Workers use ChatGPT authentication,
@@ -264,18 +270,19 @@ New runs persist the page size selected by `init --online-batch-size` (1–256, 
 runs keep their original size. At the default candidate limit of 20, the selected 256-source page
 requests at most `256 × (20 + 1) = 5,376` evidence Book IDs before deduplication; final packets
 contain at most 20 Books including the source. There is one database connection and a bounded
-four-part pipeline, never an unbounded prefetch queue.
+eight-part pipeline, never an unbounded prefetch queue.
 Neither the worker count nor packet batching multiplies database transactions.
 
-The v5 worker first asks Luna for a conservative Boolean routine-keep triage in groups of 20. A
-fast-path keep is accepted only when the packet contains the source and no other candidate, the
-model reports a clear genuine distinct Book, and the coordinator can mechanically construct and
-validate booklike-title plus synopsis, author, or identifier citations. Every false, malformed,
-uncertain, candidate-bearing, or unsupported triage result goes through the complete v5 decision
+The v6 worker first asks Luna for a compact five-way semantic classification in groups of five. A
+fast-path keep is accepted only when the model reports high-confidence `keep/distinct_work`, the
+packet contains the source and no other candidate, the stored suspicious-signal set is empty, and
+the coordinator can mechanically construct and validate booklike-title plus synopsis, author, or
+identifier citations. Every other, malformed, uncertain, candidate-bearing, or unsupported result
+goes through the complete v6 decision
 prompt in groups of four. Full-output validation retains valid per-source proposals and retries
 only rejected sources. Capture, triage, complete decisions, and recording overlap across at most
-four parts, while one shared semaphore caps all model requests at 128. With a 256-source page, the
-local evidence backlog is bounded at 1,024 sources.
+eight parts, while one shared semaphore caps all model requests at 128. With a 256-source page, the
+local evidence backlog is bounded at 2,048 sources.
 
 Four-packet requests amortize fixed prompt and process-startup overhead. Ignoring general Codex
 configuration and project instructions avoids duplicating unrelated plugins, MCP tools, and
@@ -284,8 +291,8 @@ output limits of 1,000,000 bytes sum to 128,000,000 bytes. These are payload bou
 or total RAM estimates; coordinator objects, child processes, and model-harness memory are
 additional and must be measured.
 Do not claim a proportional speedup: part barriers, request latency, rate limits, and database
-capture time determine sustained throughput. The shared request semaphore, 32-request triage
-limit, four-part window, and mix of triage/full work determine effective concurrency.
+capture time determine sustained throughput. The shared request semaphore, 64-request guarded-classification
+limit, eight-part window, and mix of triage/full work determine effective concurrency.
 
 The read-only `probe` command measures a page without storing evidence or changing checkpoints.
 It runs each SELECT normally and again with EXPLAIN ANALYZE; diagnostic elapsed time includes both
@@ -321,6 +328,16 @@ every packet with a non-source candidate. With roughly half the corpus routed to
 the measured stage capacities support a pipelined estimate above the required 455 decisions/minute
 for a five-hour run. The first production parts must confirm sustained end-to-end throughput;
 pause rather than claim the target if it remains below the threshold.
+
+The v6 guarded classifier was then benchmarked over all 1,920 persisted v3 decisions, again
+without saving prompts or model outputs. It assigned 1,910 sources in 173.261 seconds
+(661.4 assigned sources/minute). The deterministic fast-path guards accepted 1,135 keeps; 1,129
+agreed with the historical keep disposition, for 99.47% precision. The six disagreements are why
+the classifier is not itself a decision worker: only its narrowly guarded keeps bypass the full
+worker, and every other result falls back. This matches the measured 99.4%–99.7% v5 triage
+precision while raising guarded acceptance from roughly 45% in the v5 production canary to about
+59% in the historical benchmark. Historical decisions are a regression baseline, not human truth;
+the v6 production canary must still demonstrate at least 455 end-to-end decisions/minute.
 
 The final 64-source plan used 1,684 shared-hit blocks for candidate search, no disk-read blocks,
 and no temporary spill. Source and evidence EXPLAIN execution were 0.531 and 13.468 ms. Normal

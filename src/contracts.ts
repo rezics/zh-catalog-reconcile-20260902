@@ -140,9 +140,9 @@ export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema
 export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
 export const LunaWorkerModel = "gpt-5.6-luna" as const;
-export const LunaWorkerPromptRevision = "full-online-luna-v5" as const;
-export const LunaTriagePromptRevision = "full-online-luna-v5-triage" as const;
-export const LunaProposalProtocol = "triage-claim-local-citations-v3" as const;
+export const LunaWorkerPromptRevision = "full-online-luna-v6" as const;
+export const LunaTriagePromptRevision = "full-online-luna-v6-triage" as const;
+export const LunaProposalProtocol = "guarded-classifier-claim-local-citations-v4" as const;
 export const HistoricalLunaWorkerProtocolV2 = {
 	kind: "codex",
 	model: LunaWorkerModel,
@@ -161,7 +161,7 @@ export const HistoricalLunaWorkerProtocolV3 = {
 	kind: "codex",
 	model: LunaWorkerModel,
 	promptRevision: "full-online-luna-v3",
-	proposalProtocol: LunaProposalProtocol,
+	proposalProtocol: "claim-local-citations-v2",
 } as const;
 const HistoricalLunaWorkerProtocolV3Schema = z
 	.object({
@@ -185,6 +185,22 @@ const HistoricalLunaWorkerProtocolV4Schema = z
 		proposalProtocol: z.literal(HistoricalLunaWorkerProtocolV4.proposalProtocol),
 	})
 	.strict();
+export const HistoricalLunaWorkerProtocolV5 = {
+	kind: "codex",
+	model: LunaWorkerModel,
+	promptRevision: "full-online-luna-v5",
+	triagePromptRevision: "full-online-luna-v5-triage",
+	proposalProtocol: "triage-claim-local-citations-v3",
+} as const;
+const HistoricalLunaWorkerProtocolV5Schema = z
+	.object({
+		kind: z.literal("codex"),
+		model: z.literal(LunaWorkerModel),
+		promptRevision: z.literal(HistoricalLunaWorkerProtocolV5.promptRevision),
+		triagePromptRevision: z.literal(HistoricalLunaWorkerProtocolV5.triagePromptRevision),
+		proposalProtocol: z.literal(HistoricalLunaWorkerProtocolV5.proposalProtocol),
+	})
+	.strict();
 const CurrentLunaWorkerProtocolSchema = z
 	.object({
 		kind: z.literal("codex"),
@@ -198,6 +214,7 @@ export const WorkerProtocolSchema = z.union([
 	HistoricalLunaWorkerProtocolV2Schema,
 	HistoricalLunaWorkerProtocolV3Schema,
 	HistoricalLunaWorkerProtocolV4Schema,
+	HistoricalLunaWorkerProtocolV5Schema,
 	CurrentLunaWorkerProtocolSchema,
 ]);
 export type WorkerProtocol = z.infer<typeof WorkerProtocolSchema>;
@@ -768,14 +785,17 @@ export type DecisionProposalBatch = z.infer<typeof DecisionProposalBatchSchema>;
 export const TriageDecisionSchema = z
 	.object({
 		sourceUnitId: UuidSchema,
-		routineKeep: z.boolean(),
+		confidence: DecisionConfidenceSchema,
+		disposition: z.enum(["keep", "merge", "soft_delete", "revise", "review"]),
+		reason: DecisionReasonSchema,
+		targetUnitId: UuidSchema.nullable(),
 	})
 	.strict();
 export type TriageDecision = z.infer<typeof TriageDecisionSchema>;
 
 export const TriageDecisionBatchSchema = z
 	.object({
-		decisions: z.array(TriageDecisionSchema).min(1).max(20),
+		decisions: z.array(TriageDecisionSchema).min(1).max(5),
 	})
 	.strict();
 export type TriageDecisionBatch = z.infer<typeof TriageDecisionBatchSchema>;

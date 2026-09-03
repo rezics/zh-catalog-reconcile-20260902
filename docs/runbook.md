@@ -87,7 +87,7 @@ bun run reconcile status --run prod-online-20260903
 
 Delete only the temporary decision input after successful recording. Repeat `next` and `record`.
 Manual `next` fetches another online page only after all current packets are decided. Full `work`
-uses a separate bounded four-part window so database capture can overlap inference without growing
+uses a separate bounded eight-part window so database capture can overlap inference without growing
 into a catalog export.
 
 Each decision must follow the repository decision template. Routine actions use typed English
@@ -100,7 +100,7 @@ For a complete run, prefer the single-coordinator concurrent inference command:
 
 ```powershell
 bun run reconcile work `
-  --run full-online-luna-v5-20260904 `
+  --run full-online-luna-v6-20260904 `
   --concurrency 128 `
   --packets-per-worker 4 `
   --max-attempts 5 `
@@ -114,12 +114,13 @@ then run the same command to resume. Never use a run containing decisions from a
 or prompt revision, and never use `--after-run` to skip an untrusted decision range. Workers force
 ChatGPT login, standard (non-Fast) service, medium reasoning, and a tool-free isolated Codex
 configuration. They never redeem a usage reset; an exhausted allowance is a resumable stop.
-The `full-online-luna-v5` worker protocol first performs conservative 20-source routine-keep
-triage, then places citations inside each basis or uncertainty for every full decision; the
+The `full-online-luna-v6` worker protocol first performs guarded five-source semantic
+classification, then places citations inside each basis or uncertainty for every fallback full decision; the
 coordinator alone derives the citation indexes stored in final decisions. The worker prompt and
 deterministic validator share one basis claim contract for allowed fields and required Unit roles.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
-Historical `full-online-luna-v2`, `full-online-luna-v3`, and `full-online-luna-v4` runs remain
+Historical `full-online-luna-v2`, `full-online-luna-v3`, `full-online-luna-v4`, and
+`full-online-luna-v5` runs remain
 readable by `status` and `audit` but cannot resume `work`.
 
 ## Linux full run
@@ -134,15 +135,15 @@ After repository checks and `doctor` pass, initialize a fresh replacement run fr
 
 ```bash
 bun run reconcile init \
-  --run full-online-luna-v5-20260904 \
+  --run full-online-luna-v6-20260904 \
   --rezics-ref v1.7.0 \
   --cutoff 2026-09-02T16:00:00.000Z \
   --online-batch-size 256 \
-  --worker-protocol full-online-luna-v5
-bun run reconcile probe --run full-online-luna-v5-20260904
-bun run reconcile inventory --run full-online-luna-v5-20260904
+  --worker-protocol full-online-luna-v6
+bun run reconcile probe --run full-online-luna-v6-20260904
+bun run reconcile inventory --run full-online-luna-v6-20260904
 bun run reconcile work \
-  --run full-online-luna-v5-20260904 \
+  --run full-online-luna-v6-20260904 \
   --concurrency 128 \
   --packets-per-worker 4 \
   --max-attempts 5 \
@@ -165,8 +166,8 @@ base-table/index traversal exceeding the candidate bound, considering filtered r
 rounding. Investigate broad scans, temporary spills, and timeouts before starting work; one sample
 is not a p95 benchmark or proof of the search function's internal plan.
 
-The `work.started` event records configured retries, conservative triage settings, the four-part
-pipeline window, and maximum effective parallelism. Triage groups 20 packets, full decisions group
+The `work.started` event records configured retries, guarded classification settings, the eight-part
+pipeline window, and maximum effective parallelism. Guarded classification groups five packets, full decisions group
 four, and a shared semaphore caps all model requests at 128. Database capture and recording still
 have one owner. `--progress-every 100` controls reporting only, not
 the number of decisions or duration of the run. `--max-attempts` is bounded from 1 through 5 and

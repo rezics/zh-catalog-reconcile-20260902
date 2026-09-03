@@ -4,7 +4,7 @@
   "properties": {
     "decisions": {
       "minItems": 1,
-      "maxItems": 20,
+      "maxItems": 5,
       "type": "array",
       "items": {
         "type": "object",
@@ -14,13 +14,59 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "routineKeep": {
-            "type": "boolean"
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "merge",
+              "soft_delete",
+              "revise",
+              "review"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "duplicate_identity",
+              "query_fragment",
+              "character_as_book",
+              "person_or_entity_as_book",
+              "malformed_scrape",
+              "placeholder",
+              "wrong_attribution",
+              "wrong_metadata",
+              "distinct_work",
+              "insufficient_evidence",
+              "other"
+            ]
+          },
+          "targetUnitId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "sourceUnitId",
-          "routineKeep"
+          "confidence",
+          "disposition",
+          "reason",
+          "targetUnitId"
         ],
         "additionalProperties": false
       }

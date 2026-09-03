@@ -48,9 +48,9 @@ import {
 export const WorkDefaults = {
 	concurrency: 128,
 	packetsPerWorker: 4,
-	triageConcurrency: 32,
-	triagePacketsPerWorker: 20,
-	maxActiveParts: 4,
+	triageConcurrency: 64,
+	triagePacketsPerWorker: 5,
+	maxActiveParts: 8,
 	maxAttempts: 5,
 	progressEvery: 1_000,
 } as const;
@@ -190,12 +190,19 @@ export function classifyDecisionWorkerFeedback(error: unknown): DecisionWorkerFe
 
 export class DecisionWorkerAttemptsExhaustedError extends Error {
 	readonly feedback: DecisionWorkerFeedback | undefined;
+	readonly decisions: readonly SourceDecision[];
 
-	constructor(maxAttempts: number, feedback: DecisionWorkerFeedback | undefined, cause: unknown) {
+	constructor(
+		maxAttempts: number,
+		feedback: DecisionWorkerFeedback | undefined,
+		cause: unknown,
+		decisions: readonly SourceDecision[] = [],
+	) {
 		const suffix = feedback === undefined ? "" : ` (${feedback.category}:${feedback.issue})`;
 		super(`Luna worker failed after ${maxAttempts} attempts${suffix}`, { cause });
 		this.name = "DecisionWorkerAttemptsExhaustedError";
 		this.feedback = feedback;
+		this.decisions = decisions;
 	}
 }
 
@@ -392,7 +399,33 @@ async function triageDecisionItems(
 	for (const item of items) {
 		const sourceUnitId = item.undecidedSourceUnitIds[0];
 		const proposal = sourceUnitId ? routineKeepProposal(item) : undefined;
-		if (!sourceUnitId || !bySource.get(sourceUnitId)?.routineKeep || !proposal) {
+		const result = sourceUnitId ? bySource.get(sourceUnitId) : undefined;
+		const source = sourceUnitId
+			? item.packet.candidates.find(({ id }) => id === sourceUnitId)
+			: undefined;
+		const suspiciousSignals = sourceUnitId
+			? (item.packet.suspiciousSignals[sourceUnitId] ?? [])
+			: [];
+		const hasGuardedCorroboration =
+			(source?.localizations.some(
+				({ summary, description }) =>
+					Boolean(summary?.trim()) ||
+					(typeof description === "string" && Boolean(description.trim())),
+			) ??
+				false) ||
+			(source?.attributions.some(({ role }) => role.toLocaleLowerCase("en-US") === "author") ??
+				false) ||
+			Boolean(source?.details.isbn13);
+		if (
+			!sourceUnitId ||
+			result?.disposition !== "keep" ||
+			result.reason !== "distinct_work" ||
+			result.confidence !== "high" ||
+			result.targetUnitId !== null ||
+			suspiciousSignals.length !== 0 ||
+			!hasGuardedCorroboration ||
+			!proposal
+		) {
 			fallbackItems.push(item);
 			continue;
 		}
@@ -477,7 +510,7 @@ async function decideWithRetry(
 				);
 		}
 	}
-	throw new DecisionWorkerAttemptsExhaustedError(maxAttempts, feedback, lastError);
+	throw new DecisionWorkerAttemptsExhaustedError(maxAttempts, feedback, lastError, decisions);
 }
 
 async function concurrently<T, R>(
@@ -527,15 +560,6 @@ class Semaphore {
 	}
 }
 
-async function settleAll<Result>(promises: readonly Promise<Result>[]): Promise<Result[]> {
-	const outcomes = await Promise.allSettled(promises);
-	const rejected = outcomes.find(
-		(outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
-	);
-	if (rejected) throw rejected.reason;
-	return outcomes.map((outcome) => (outcome as PromiseFulfilledResult<Result>).value);
-}
-
 type PipelinedPartResult = {
 	readonly part: number;
 	readonly recorded: number;
@@ -543,6 +567,20 @@ type PipelinedPartResult = {
 	readonly routineKeeps: number;
 	readonly triageFallbacks: number;
 };
+
+class PartialPipelinedBatchError extends Error {
+	constructor(
+		readonly decisions: readonly SourceDecision[],
+		readonly workerRetries: number,
+		readonly routineKeeps: number,
+		readonly triageFallbacks: number,
+		readonly originalError: unknown,
+	) {
+		super("A pipelined batch failed after producing validated partial decisions", {
+			cause: originalError,
+		});
+	}
+}
 
 async function processPipelinedPart(
 	config: RunConfig,
@@ -558,38 +596,87 @@ async function processPipelinedPart(
 	if (pending.length === 0)
 		return { part, recorded: 0, workerRetries: 0, routineKeeps: 0, triageFallbacks: 0 };
 	const triageBatches = chunks(pending, WorkDefaults.triagePacketsPerWorker);
-	const batchResults = await settleAll(
+	const batchOutcomes = await Promise.allSettled(
 		triageBatches.map(async (triageBatch) => {
 			const triaged = await triageLimit.run(() =>
 				requestLimit.run(() =>
 					triageDecisionItems(config, dependencies.triage, triageBatch, signal),
 				),
 			);
-			const fullResults = await settleAll(
+			const fullOutcomes = await Promise.allSettled(
 				chunks(triaged.fallbackItems, packetsPerWorker).map((batch) =>
 					requestLimit.run(() =>
 						decideWithRetry(config, dependencies.worker, batch, maxAttempts, signal),
 					),
 				),
 			);
+			const decisions = [...triaged.decisions];
+			let workerRetries = 0;
+			let firstError: unknown;
+			for (const outcome of fullOutcomes) {
+				if (outcome.status === "fulfilled") {
+					decisions.push(...outcome.value.decisions);
+					workerRetries += outcome.value.retries;
+					continue;
+				}
+				firstError ??= outcome.reason;
+				if (outcome.reason instanceof DecisionWorkerAttemptsExhaustedError) {
+					decisions.push(...outcome.reason.decisions);
+					workerRetries += maxAttempts - 1;
+				}
+			}
+			if (firstError !== undefined)
+				throw new PartialPipelinedBatchError(
+					decisions,
+					workerRetries,
+					triaged.routineKeeps,
+					triaged.triageFallbacks,
+					firstError,
+				);
 			return {
-				decisions: [...triaged.decisions, ...fullResults.flatMap(({ decisions }) => decisions)],
-				workerRetries: fullResults.reduce((sum, result) => sum + result.retries, 0),
+				decisions,
+				workerRetries,
 				routineKeeps: triaged.routineKeeps,
 				triageFallbacks: triaged.triageFallbacks,
 			};
 		}),
 	);
-	const decisions = batchResults.flatMap(({ decisions: values }) => values);
-	const recorded = await dependencies.record(config, decisions);
-	if (recorded.recorded !== decisions.length)
-		throw new Error(`Recorded ${recorded.recorded} decisions, expected ${decisions.length}`);
+	const decisions: SourceDecision[] = [];
+	let workerRetries = 0;
+	let routineKeeps = 0;
+	let triageFallbacks = 0;
+	let firstError: unknown;
+	for (const outcome of batchOutcomes) {
+		if (outcome.status === "fulfilled") {
+			decisions.push(...outcome.value.decisions);
+			workerRetries += outcome.value.workerRetries;
+			routineKeeps += outcome.value.routineKeeps;
+			triageFallbacks += outcome.value.triageFallbacks;
+			continue;
+		}
+		const error = outcome.reason;
+		if (error instanceof PartialPipelinedBatchError) {
+			decisions.push(...error.decisions);
+			workerRetries += error.workerRetries;
+			routineKeeps += error.routineKeeps;
+			triageFallbacks += error.triageFallbacks;
+			firstError ??= error.originalError;
+		} else firstError ??= error;
+	}
+	let recordedCount = 0;
+	if (decisions.length > 0) {
+		const recorded = await dependencies.record(config, decisions);
+		if (recorded.recorded !== decisions.length)
+			throw new Error(`Recorded ${recorded.recorded} decisions, expected ${decisions.length}`);
+		recordedCount = recorded.recorded;
+	}
+	if (firstError !== undefined) throw firstError;
 	return {
 		part,
-		recorded: recorded.recorded,
-		workerRetries: batchResults.reduce((sum, result) => sum + result.workerRetries, 0),
-		routineKeeps: batchResults.reduce((sum, result) => sum + result.routineKeeps, 0),
-		triageFallbacks: batchResults.reduce((sum, result) => sum + result.triageFallbacks, 0),
+		recorded: recordedCount,
+		workerRetries,
+		routineKeeps,
+		triageFallbacks,
 	};
 }
 
@@ -735,7 +822,10 @@ export async function runConcurrentReconciliation(
 							items.flatMap(({ undecidedSourceUnitIds }) =>
 								undecidedSourceUnitIds.map((sourceUnitId) => ({
 									sourceUnitId,
-									routineKeep: false,
+									confidence: "low" as const,
+									disposition: "review" as const,
+									reason: "insufficient_evidence" as const,
+									targetUnitId: null,
 								})),
 							),
 					}),

@@ -27,8 +27,8 @@ AI requests `next`
 ## Online instead of a local catalog copy
 
 The full-run `work` command preserves a single capture/write path and fans out only model
-inference. One coordinator pipelines at most four persisted packet parts, performs conservative
-20-source routine-keep triage, splits every fallback into four-packet work items, runs ephemeral
+inference. One coordinator pipelines at most eight persisted packet parts, performs guarded
+five-source semantic classification, splits every fallback into four-packet work items, runs ephemeral
 Luna processes concurrently behind one 128-request semaphore, validates returned proposals per
 source, and records each completed part through one writer. Workers cannot choose run IDs, packet
 hashes, timestamps, or actor
@@ -122,15 +122,15 @@ coverage, idempotency, and action compilation; the model owns only bounded seman
 
 ## Scaling
 
-The local runner applies backpressure with a four-part active window; capture can overlap model
+The local runner applies backpressure with an eight-part active window; capture can overlap model
 inference but never grows into a catalog snapshot. At hundreds of millions of sources, partition the creation keyspace, run multiple
 rate-limited workers, and replace repo-local packet parts with durable object storage. Do not turn
 the online design back into a complete local export to scale it.
 
 New runs default to 64 one-source packets per page; the current production run uses the probed
 256-source page. Initialization accepts page sizes from 1 to 256; old runs retain their persisted
-size. Triage uses at most 32 of the shared 128 request slots, full decisions use groups of four,
-and no more than four parts are active. Capture remains one short transaction at a time and is
+size. Guarded classification uses at most 64 of the shared 128 request slots, full decisions use groups of four,
+and no more than eight parts are active. Capture remains one short transaction at a time and is
 never multiplied by inference concurrency. Process memory, rate limits, capture latency, and tail
 requests still determine sustained throughput; configured parallelism is not a proportional
 speedup guarantee.

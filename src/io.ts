@@ -12,7 +12,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { createInterface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import type { z } from "zod";
 
@@ -102,19 +102,33 @@ export async function* readJsonLines<T extends z.ZodType>(
 	path: string,
 	schema: T,
 ): AsyncGenerator<z.infer<T>> {
-	const input = createInterface({
-		input: createReadStream(path, "utf8"),
-		crlfDelay: Number.POSITIVE_INFINITY,
-	});
+	const input = createReadStream(path);
+	const decoder = new StringDecoder("utf8");
+	let buffered = "";
 	let lineNumber = 0;
-	for await (const line of input) {
+	const parseLine = (line: string): z.infer<T> | undefined => {
 		lineNumber += 1;
-		if (!line.trim()) continue;
+		if (!line.trim()) return undefined;
 		try {
-			yield schema.parse(JSON.parse(line));
+			return schema.parse(JSON.parse(line));
 		} catch (error) {
 			throw new Error(`Invalid JSONL contract at ${path}:${lineNumber}`, { cause: error });
 		}
+	};
+	for await (const chunk of input) {
+		buffered += decoder.write(chunk as Buffer);
+		for (;;) {
+			const newline = buffered.indexOf("\n");
+			if (newline < 0) break;
+			const value = parseLine(buffered.slice(0, newline));
+			buffered = buffered.slice(newline + 1);
+			if (value !== undefined) yield value;
+		}
+	}
+	buffered += decoder.end();
+	if (buffered.length > 0) {
+		const value = parseLine(buffered);
+		if (value !== undefined) yield value;
 	}
 }
 
@@ -152,10 +166,29 @@ export async function withFileLock<T>(lockPath: string, operation: () => Promise
 	let handle: FileHandle;
 	try {
 		handle = await open(lockPath, "wx");
-		await handle.writeFile(`${process.pid} ${nowIso()}\n`);
 	} catch (error) {
-		throw new Error(`Could not acquire lock ${lockPath}`, { cause: error });
+		const code = (error as NodeJS.ErrnoException).code;
+		if (code !== "EEXIST") throw new Error(`Could not acquire lock ${lockPath}`, { cause: error });
+		const contents = await readFile(lockPath, "utf8").catch(() => "");
+		const pid = Number.parseInt(contents.split(/\s/u, 1)[0] ?? "", 10);
+		let ownerIsAlive = !Number.isSafeInteger(pid) || pid <= 0;
+		if (!ownerIsAlive) {
+			try {
+				process.kill(pid, 0);
+				ownerIsAlive = true;
+			} catch (ownerError) {
+				ownerIsAlive = (ownerError as NodeJS.ErrnoException).code === "EPERM";
+			}
+		}
+		if (ownerIsAlive) throw new Error(`Could not acquire lock ${lockPath}`, { cause: error });
+		await rm(lockPath, { force: true });
+		try {
+			handle = await open(lockPath, "wx");
+		} catch (retryError) {
+			throw new Error(`Could not acquire lock ${lockPath}`, { cause: retryError });
+		}
 	}
+	await handle.writeFile(`${process.pid} ${nowIso()}\n`);
 	try {
 		return await operation();
 	} finally {

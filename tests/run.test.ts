@@ -7,6 +7,7 @@ import {
 	HistoricalLunaWorkerProtocolV2,
 	HistoricalLunaWorkerProtocolV3,
 	HistoricalLunaWorkerProtocolV4,
+	HistoricalLunaWorkerProtocolV5,
 	WorkerProtocolSchema,
 } from "../src/contracts.ts";
 import { loadRunConfig, pathExists, repositoryRoot, runDirectory } from "../src/io.ts";
@@ -96,7 +97,7 @@ test("init CLI pins the requested full-run worker protocol", async () => {
 				"--cutoff",
 				"2026-09-02T16:00:00.000Z",
 				"--worker-protocol",
-				"full-online-luna-v5",
+				"full-online-luna-v6",
 			],
 			{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
 		);
@@ -125,11 +126,18 @@ test("historical v4 worker protocol remains readable", () => {
 	);
 });
 
+test("historical v5 worker protocol remains readable", () => {
+	expect(WorkerProtocolSchema.parse(HistoricalLunaWorkerProtocolV5)).toEqual(
+		HistoricalLunaWorkerProtocolV5,
+	);
+});
+
 test.each([
 	"full-online-luna-v1",
 	"full-online-luna-v2",
 	"full-online-luna-v3",
 	"full-online-luna-v4",
+	"full-online-luna-v5",
 ])("init CLI rejects obsolete worker protocol %s before creating a run", async (workerProtocol) => {
 	const runId = `cli-worker-obsolete-${randomUUID()}`;
 	try {

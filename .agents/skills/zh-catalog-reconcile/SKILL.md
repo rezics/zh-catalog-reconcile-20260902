@@ -77,7 +77,7 @@ transaction, and atomically persists the packet part. AI inference never runs in
 transaction.
 
 Do not run ad hoc SQL or create `snapshot/books.jsonl`. Do not preload the complete source or
-candidate catalog. The full-run coordinator may pipeline at most eight packet parts; manual `next`
+candidate catalog. The full-run coordinator may pipeline at most sixteen packet parts; manual `next`
 still fetches another page only after exhausting and recording the current packets.
 
 ## Decide packets

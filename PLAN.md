@@ -233,7 +233,7 @@ growth, and decision backlog. Pause capture when these exceed the approved opera
 For the current task, online batches keep database work bounded and eliminate the unnecessary
 complete local catalog copy.
 
-Decision execution keeps at most eight packet parts (2,048 sources maximum at the selected page,
+Decision execution keeps at most sixteen packet parts (4,096 sources maximum at the selected page,
 20 candidates per packet) active in memory. Recording checks only the affected part. `audit` is an optional streaming O(N) pass
 with fixed-size counters and at most 100 sampled issues; manifest generation performs the same
 quality aggregation while already streaming decisions, not as a second pass. At 500,000,000 or
@@ -265,7 +265,7 @@ If a proposal contains an invalid redundant basis, the coordinator may omit it o
 remaining non-empty basis subset independently passes every disposition and citation validator.
 
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
-decision request, 20 packets per guarded classification request, and eight active packet parts. The
+decision request, 20 packets per guarded classification request, and sixteen active packet parts. The
 operator's execution host is a Fedora Threadripper 3970X with
 32 cores / 64 threads and 64 GB RAM; the separate database host has 16 cores and 64 GB RAM. These
 are operator-provided specifications, not measured utilization. Workers use ChatGPT authentication,

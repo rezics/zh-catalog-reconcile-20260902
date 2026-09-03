@@ -50,7 +50,7 @@ export const WorkDefaults = {
 	packetsPerWorker: 4,
 	triageConcurrency: 64,
 	triagePacketsPerWorker: 20,
-	maxActiveParts: 8,
+	maxActiveParts: 16,
 	maxAttempts: 5,
 	progressEvery: 1_000,
 } as const;

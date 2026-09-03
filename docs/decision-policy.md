@@ -72,15 +72,30 @@ Every revision and every medium/low-confidence action requires human approval.
 - `insufficient_evidence`
 - `other`
 
-Every decision must include `citations`. A citation identifies a candidate Book Unit, a typed
-stored field, and an exact excerpt of at most 240 characters. The excerpt must occur in that field,
-the cited Unit must appear in `evidenceUnitIds`, and the explanation must mention at least one
-cited excerpt. Merge decisions must cite both source and target. Review decisions must include a
-typed `uncertainties` entry. Explanations remain under 500 characters; do not restate the full
-description or reveal chain-of-thought.
+## Evidence claims
 
-Three or more identical explanations within one packet part are rejected. A complete part of at
-least ten decisions containing only low-confidence `insufficient_evidence` reviews is also
-rejected and requires human canary inspection. These are degeneration stops, not disposition
-quotas: never turn an uncertain case into `keep`, `merge`, or `soft_delete` merely to change the
-distribution.
+Every decision must include `citations`. A citation identifies a candidate Book Unit, a typed
+stored field, and an exact excerpt of at most 240 characters. The excerpt must occur in that field.
+
+Routine actions use typed English `basis` entries instead of natural-language explanations. Each
+basis entry contains zero-based `citationIndexes`; every referenced citation must have the Unit
+role and field type required by that code, and every citation must be used. In particular:
+
+- `keep` requires `booklike_title` plus at least one of `synopsis_describes_work`,
+  `author_attribution_present`, or `identifier_present`;
+- `merge` requires `same_identifier`, or title correspondence plus `same_synopsis` or
+  `same_attribution`;
+- `soft_delete` requires the basis corresponding to its reason code;
+- `revise` requires metadata- or attribution-correction evidence matching its reason and patches;
+- `review` uses typed `uncertainties` linked to source and related-candidate citations instead of
+  basis entries.
+
+Do not output `explanation` or top-level `evidenceUnitIds`. A concise `note` is required only for
+an explicit `other` reason or uncertainty and is rejected otherwise. Historical v1/v2
+explanations remain readable; repeated text or templates that merely substitute evidence values
+fail audit.
+
+A complete part of at least ten decisions containing only low-confidence `insufficient_evidence`
+reviews is rejected and requires human canary inspection. These are degeneration stops, not
+disposition quotas: never turn an uncertain case into `keep`, `merge`, or `soft_delete` merely to
+change the distribution.

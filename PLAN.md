@@ -32,9 +32,10 @@ online from REZICS; do not retrieve external metadata or copy the complete catal
 
 - Record the deployed server image digest, root release tag, database migration head, creation
   cutoff, operator identity, model identity, prompt revision, and repository commit in `run.json`.
-- Require `decisionPolicyRevision: "evidence-grounded-v2"` for every new decision-producing run.
-  Runs without that field are interpreted as `legacy-v1`, remain available for audit, and cannot
-  be resumed or used to generate a manifest. Start a new run rather than rewriting their JSONL.
+- Require `decisionPolicyRevision: "evidence-claims-v3"` for every new decision-producing run.
+  Runs without that field are interpreted as `legacy-v1`; `evidence-grounded-v2` and `legacy-v1`
+  runs remain available for audit but cannot be resumed or used to generate a manifest. Start a
+  new run rather than rewriting their JSONL.
 - Require `evidenceMode: "online-batched"`. Legacy runs without this field are incompatible and
   must not be resumed.
 - Prefer a dedicated database role with `CONNECT`, catalog `SELECT`, and permission to execute the
@@ -106,10 +107,13 @@ Record the exact public model/version identity and prompt revision.
 Quality gates:
 
 - schema-invalid decision rate: 0%;
-- every decision cites an exact excerpt from stored packet evidence and mentions a citation in its
-  explanation;
-- every `review` records at least one typed unresolved question;
-- repeated explanations within a packet part: 0 groups of three or more;
+- every decision cites exact stored packet evidence;
+- every routine action uses typed English basis codes, each linked to compatible citations;
+- every `keep` cites a Book-like title plus synopsis, attribution, or identifier corroboration;
+- every `merge` cites a shared identifier or title correspondence plus synopsis or attribution;
+- every `review` records typed uncertainties linked to source and related-candidate citations;
+- free-form notes occur only for an explicit `other` reason or uncertainty;
+- legacy repeated or evidence-substituted explanation templates: 0;
 - a complete part containing only low-confidence `insufficient_evidence` reviews pauses the run;
 - decision coverage: exactly one per discovered source;
 - non-`zh` mutation-source leakage: 0;
@@ -192,6 +196,10 @@ with fixed-size counters and at most 100 sampled issues; manifest generation per
 quality aggregation while already streaming decisions, not as a second pass. At 500,000,000 or
 3,000,000,000 sources, audit and manifest work partition by packet-part range and aggregate their
 fixed-size summaries alongside the packet-storage sharding described above.
+
+The model no longer repeats natural-language explanations, source Unit IDs, and cited titles in
+the same field. Basis codes and citation indexes keep routine output bounded while preserving the
+full immutable packet and exact citation excerpts for audit.
 
 ## Completion criteria
 

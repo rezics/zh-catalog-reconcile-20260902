@@ -131,8 +131,13 @@ export const BookEvidenceSchema = RawBookEvidenceSchema.extend({
 	});
 export type BookEvidence = z.infer<typeof BookEvidenceSchema>;
 
-export const DecisionPolicyRevisionSchema = z.enum(["legacy-v1", "evidence-grounded-v2"]);
+export const DecisionPolicyRevisionSchema = z.enum([
+	"legacy-v1",
+	"evidence-grounded-v2",
+	"evidence-claims-v3",
+]);
 export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema>;
+export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
 export const RunConfigSchema = z
 	.object({
@@ -317,16 +322,58 @@ export const DecisionUncertaintyKindSchema = z.enum([
 	"other",
 ]);
 
-export const DecisionUncertaintySchema = z
+export const EvidenceGroundedDecisionUncertaintySchema = z
 	.object({
 		kind: DecisionUncertaintyKindSchema,
 		detail: z.string().trim().min(8).max(240),
 		relatedUnitIds: z.array(UuidSchema).max(20),
 	})
 	.strict();
+export type EvidenceGroundedDecisionUncertainty = z.infer<
+	typeof EvidenceGroundedDecisionUncertaintySchema
+>;
+
+export const DecisionBasisCodeSchema = z.enum([
+	"booklike_title",
+	"synopsis_describes_work",
+	"author_attribution_present",
+	"identifier_present",
+	"distinct_candidate_evidence",
+	"same_title",
+	"title_variant_same_work",
+	"same_synopsis",
+	"same_attribution",
+	"same_identifier",
+	"query_like_title",
+	"question_like_title",
+	"character_identity",
+	"person_or_entity_identity",
+	"malformed_metadata",
+	"placeholder_metadata",
+	"non_book_identity",
+	"metadata_correction_supported",
+	"attribution_correction_supported",
+]);
+export type DecisionBasisCode = z.infer<typeof DecisionBasisCodeSchema>;
+
+export const DecisionBasisSchema = z
+	.object({
+		code: DecisionBasisCodeSchema,
+		citationIndexes: z.array(z.int().min(0).max(19)).min(1).max(6),
+	})
+	.strict();
+export type DecisionBasis = z.infer<typeof DecisionBasisSchema>;
+
+export const DecisionUncertaintySchema = z
+	.object({
+		kind: DecisionUncertaintyKindSchema,
+		citationIndexes: z.array(z.int().min(0).max(19)).min(1).max(6),
+		relatedUnitIds: z.array(UuidSchema).max(20),
+	})
+	.strict();
 export type DecisionUncertainty = z.infer<typeof DecisionUncertaintySchema>;
 
-const LegacyDecisionBaseFields = {
+const DecisionEnvelopeFields = {
 	schemaVersion: z.literal(SchemaVersion),
 	runId: RunIdSchema,
 	part: z.int().nonnegative(),
@@ -336,13 +383,23 @@ const LegacyDecisionBaseFields = {
 	decidedAt: DateTimeSchema,
 	actor: DecisionActorSchema,
 	confidence: DecisionConfidenceSchema,
+} as const;
+
+const LegacyDecisionBaseFields = {
+	...DecisionEnvelopeFields,
 	explanation: z.string().min(1).max(500),
 	evidenceUnitIds: z.array(UuidSchema).min(1).max(50),
 } as const;
 
-const DecisionBaseFields = {
+const EvidenceGroundedDecisionBaseFields = {
 	...LegacyDecisionBaseFields,
 	citations: z.array(DecisionEvidenceCitationSchema).min(1).max(20),
+} as const;
+
+const DecisionBaseFields = {
+	...DecisionEnvelopeFields,
+	citations: z.array(DecisionEvidenceCitationSchema).min(1).max(20),
+	note: z.string().trim().min(8).max(240).optional(),
 } as const;
 
 export const RevisionPatchSchema = z.discriminatedUnion("kind", [
@@ -413,17 +470,89 @@ export const RevisionPatchSchema = z.discriminatedUnion("kind", [
 ]);
 export type RevisionPatch = z.infer<typeof RevisionPatchSchema>;
 
-export const SourceDecisionSchema = z.discriminatedUnion("disposition", [
+export const SourceDecisionSchema = z
+	.discriminatedUnion("disposition", [
+		z
+			.object({
+				...DecisionBaseFields,
+				disposition: z.literal("keep"),
+				reason: z.literal("distinct_work"),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionBaseFields,
+				disposition: z.literal("merge"),
+				reason: z.literal("duplicate_identity"),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				targetUnitId: UuidSchema,
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionBaseFields,
+				disposition: z.literal("soft_delete"),
+				reason: z.enum([
+					"query_fragment",
+					"character_as_book",
+					"person_or_entity_as_book",
+					"malformed_scrape",
+					"placeholder",
+					"other",
+				]),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionBaseFields,
+				disposition: z.literal("revise"),
+				reason: z.enum(["wrong_attribution", "wrong_metadata"]),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				patches: z.array(RevisionPatchSchema).min(1).max(20),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionBaseFields,
+				disposition: z.literal("review"),
+				reason: z.enum(["insufficient_evidence", "other"]),
+				uncertainties: z.array(DecisionUncertaintySchema).min(1).max(10),
+			})
+			.strict(),
+	])
+	.superRefine((decision, context) => {
+		const noteRequired =
+			decision.reason === "other" ||
+			(decision.disposition === "review" &&
+				decision.uncertainties.some(({ kind }) => kind === "other"));
+		if (noteRequired && decision.note === undefined)
+			context.addIssue({
+				code: "custom",
+				message: "A concise note is required when a typed code cannot express the decision",
+				path: ["note"],
+			});
+		if (!noteRequired && decision.note !== undefined)
+			context.addIssue({
+				code: "custom",
+				message: "Routine decisions must use typed basis or uncertainty codes instead of a note",
+				path: ["note"],
+			});
+	});
+export type SourceDecision = z.infer<typeof SourceDecisionSchema>;
+
+export const EvidenceGroundedSourceDecisionSchema = z.discriminatedUnion("disposition", [
 	z
 		.object({
-			...DecisionBaseFields,
+			...EvidenceGroundedDecisionBaseFields,
 			disposition: z.literal("keep"),
 			reason: z.literal("distinct_work"),
 		})
 		.strict(),
 	z
 		.object({
-			...DecisionBaseFields,
+			...EvidenceGroundedDecisionBaseFields,
 			disposition: z.literal("merge"),
 			reason: z.literal("duplicate_identity"),
 			targetUnitId: UuidSchema,
@@ -431,7 +560,7 @@ export const SourceDecisionSchema = z.discriminatedUnion("disposition", [
 		.strict(),
 	z
 		.object({
-			...DecisionBaseFields,
+			...EvidenceGroundedDecisionBaseFields,
 			disposition: z.literal("soft_delete"),
 			reason: z.enum([
 				"query_fragment",
@@ -445,7 +574,7 @@ export const SourceDecisionSchema = z.discriminatedUnion("disposition", [
 		.strict(),
 	z
 		.object({
-			...DecisionBaseFields,
+			...EvidenceGroundedDecisionBaseFields,
 			disposition: z.literal("revise"),
 			reason: z.enum(["wrong_attribution", "wrong_metadata"]),
 			patches: z.array(RevisionPatchSchema).min(1).max(20),
@@ -453,14 +582,14 @@ export const SourceDecisionSchema = z.discriminatedUnion("disposition", [
 		.strict(),
 	z
 		.object({
-			...DecisionBaseFields,
+			...EvidenceGroundedDecisionBaseFields,
 			disposition: z.literal("review"),
 			reason: z.enum(["insufficient_evidence", "other"]),
-			uncertainties: z.array(DecisionUncertaintySchema).min(1).max(10),
+			uncertainties: z.array(EvidenceGroundedDecisionUncertaintySchema).min(1).max(10),
 		})
 		.strict(),
 ]);
-export type SourceDecision = z.infer<typeof SourceDecisionSchema>;
+export type EvidenceGroundedSourceDecision = z.infer<typeof EvidenceGroundedSourceDecisionSchema>;
 
 export const LegacySourceDecisionSchema = z.discriminatedUnion("disposition", [
 	z
@@ -512,6 +641,7 @@ export type LegacySourceDecision = z.infer<typeof LegacySourceDecisionSchema>;
 
 export const PersistedSourceDecisionSchema = z.union([
 	SourceDecisionSchema,
+	EvidenceGroundedSourceDecisionSchema,
 	LegacySourceDecisionSchema,
 ]);
 export type PersistedSourceDecision = z.infer<typeof PersistedSourceDecisionSchema>;
@@ -523,6 +653,7 @@ export const DecisionQualityIssueCodeSchema = z.enum([
 	"duplicate_decision",
 	"unexpected_decision",
 	"duplicate_explanation",
+	"templated_explanation",
 	"blanket_review",
 ]);
 
@@ -549,6 +680,8 @@ export const DecisionQualityReportSchema = z
 		byDisposition: z.record(z.string(), z.int().nonnegative()),
 		byReason: z.record(z.string(), z.int().nonnegative()),
 		byConfidence: z.record(z.string(), z.int().nonnegative()),
+		byBasis: z.record(z.string(), z.int().nonnegative()),
+		byUncertainty: z.record(z.string(), z.int().nonnegative()),
 		issueCount: z.int().nonnegative(),
 		issueCounts: z.record(z.string(), z.int().nonnegative()),
 		sampleIssues: z.array(DecisionQualityIssueSchema).max(100),

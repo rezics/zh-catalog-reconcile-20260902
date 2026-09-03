@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
+	CurrentDecisionPolicyRevision,
 	type RunConfig,
 	RunConfigSchema,
 	SchemaVersion,
@@ -83,7 +84,7 @@ const config: RunConfig = RunConfigSchema.parse({
 	networkPolicy: "rezics-only-no-external-metadata",
 	evidenceMode: "online-batched",
 	applyState: "locked",
-	decisionPolicyRevision: "evidence-grounded-v2",
+	decisionPolicyRevision: CurrentDecisionPolicyRevision,
 	onlineBatchSize: 20,
 	maxCandidatesPerPacket: 20,
 });
@@ -126,9 +127,6 @@ describe("decision compilation", () => {
 			actor: { kind: "codex", model: "gpt-5", promptRevision: "1" },
 			confidence: "high",
 			reason: "duplicate_identity",
-			explanation:
-				'The source title "斗破苍穹萧炎" is a suffix form of the richer stored target "斗破苍穹".',
-			evidenceUnitIds: [SourceId, TargetId],
 			citations: [
 				{
 					unitId: SourceId,
@@ -140,6 +138,20 @@ describe("decision compilation", () => {
 					field: "localization_title",
 					excerpt: "斗破苍穹",
 				},
+				{
+					unitId: SourceId,
+					field: "attribution",
+					excerpt: "天蚕土豆",
+				},
+				{
+					unitId: TargetId,
+					field: "attribution",
+					excerpt: "天蚕土豆",
+				},
+			],
+			basis: [
+				{ code: "title_variant_same_work", citationIndexes: [0, 1] },
+				{ code: "same_attribution", citationIndexes: [2, 3] },
 			],
 			disposition: "merge",
 			targetUnitId: TargetId,
@@ -156,9 +168,18 @@ describe("decision compilation", () => {
 					field: "localization_title",
 					excerpt: "斗破苍穹萧炎",
 				},
+				{
+					unitId: SourceId,
+					field: "attribution",
+					excerpt: "天蚕土豆",
+				},
+			],
+			basis: [
+				{ code: "same_title", citationIndexes: [0] },
+				{ code: "same_attribution", citationIndexes: [1] },
 			],
 		});
-		expect(() => compileDecision(config, packet, sourceOnlyCitation)).toThrow("target Unit");
+		expect(() => compileDecision(config, packet, sourceOnlyCitation)).toThrow("must cite Unit");
 	});
 
 	test("rejects a merge target absent from the packet", () => {
@@ -175,8 +196,6 @@ describe("decision compilation", () => {
 			actor: { kind: "codex", model: "gpt-5", promptRevision: "1" },
 			confidence: "high",
 			reason: "duplicate_identity",
-			explanation: 'The source title is "斗破苍穹萧炎", but the proposed target is unproved.',
-			evidenceUnitIds: [SourceId],
 			citations: [
 				{
 					unitId: SourceId,
@@ -184,6 +203,7 @@ describe("decision compilation", () => {
 					excerpt: "斗破苍穹萧炎",
 				},
 			],
+			basis: [{ code: "same_title", citationIndexes: [0] }],
 			disposition: "merge",
 			targetUnitId: TargetId,
 		});

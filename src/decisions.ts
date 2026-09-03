@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+	CurrentDecisionPolicyRevision,
 	type PersistedSourceDecision,
 	PersistedSourceDecisionSchema,
 	type ReviewPacket,
@@ -12,7 +13,7 @@ import {
 } from "./contracts.ts";
 import {
 	assertDecisionPartQuality,
-	isEvidenceGroundedDecision,
+	isCurrentDecision,
 	validateDecisionAgainstPacket,
 } from "./decision-quality.ts";
 import {
@@ -80,7 +81,7 @@ export async function recordDecisions(
 	config: RunConfig,
 	decisionPath: string,
 ): Promise<{ readonly recorded: number }> {
-	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+	if (config.decisionPolicyRevision !== CurrentDecisionPolicyRevision)
 		throw new Error(
 			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
 		);
@@ -103,8 +104,8 @@ export async function recordDecisions(
 			const packetMap = await loadPacketMap(packetPath);
 			const persisted = await loadPersistedDecisions(outputPath);
 			const existing = new Set(persisted.map(({ sourceUnitId }) => sourceUnitId));
-			const grounded = persisted.filter(isEvidenceGroundedDecision);
-			if (grounded.length !== persisted.length)
+			const current = persisted.filter(isCurrentDecision);
+			if (current.length !== persisted.length)
 				throw new Error(`Packet part ${part} contains legacy decisions and cannot be resumed`);
 			for (const decision of partDecisions) {
 				if (existing.has(decision.sourceUnitId))
@@ -117,7 +118,7 @@ export async function recordDecisions(
 				(count, packet) => count + packet.sourceUnitIds.length,
 				0,
 			);
-			assertDecisionPartQuality(part, [...grounded, ...partDecisions], expectedSourceCount);
+			assertDecisionPartQuality(part, [...current, ...partDecisions], expectedSourceCount);
 			await appendJsonLines(outputPath, partDecisions);
 		});
 	}
@@ -138,7 +139,7 @@ export async function nextPackets(
 ): Promise<
 	readonly { readonly packet: ReviewPacket; readonly undecidedSourceUnitIds: readonly string[] }[]
 > {
-	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+	if (config.decisionPolicyRevision !== CurrentDecisionPolicyRevision)
 		throw new Error(
 			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
 		);

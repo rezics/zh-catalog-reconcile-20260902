@@ -21,7 +21,8 @@
       "type": "string",
       "enum": [
         "legacy-v1",
-        "evidence-grounded-v2"
+        "evidence-grounded-v2",
+        "evidence-claims-v3"
       ]
     },
     "status": {
@@ -79,6 +80,28 @@
         "maximum": 9007199254740991
       }
     },
+    "byBasis": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "byUncertainty": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
     "issueCount": {
       "type": "integer",
       "minimum": 0,
@@ -110,6 +133,7 @@
               "duplicate_decision",
               "unexpected_decision",
               "duplicate_explanation",
+              "templated_explanation",
               "blanket_review"
             ]
           },
@@ -162,6 +186,8 @@
     "byDisposition",
     "byReason",
     "byConfidence",
+    "byBasis",
+    "byUncertainty",
     "issueCount",
     "issueCounts",
     "sampleIssues"

@@ -2,6 +2,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+	CurrentDecisionPolicyRevision,
 	type ManifestAction,
 	ManifestActionSchema,
 	type ReviewPacket,
@@ -98,7 +99,7 @@ export async function generateManifest(config: RunConfig): Promise<{
 	readonly actionCount: number;
 	readonly byKind: Readonly<Record<string, number>>;
 }> {
-	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+	if (config.decisionPolicyRevision !== CurrentDecisionPolicyRevision)
 		throw new Error(
 			`Run decision policy ${config.decisionPolicyRevision} cannot produce a quality-gated manifest`,
 		);

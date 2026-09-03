@@ -18,9 +18,9 @@ Inspect `git status`, `runs/<run-id>/run.json`, and `bun run reconcile status --
 Require `evidenceMode: "online-batched"`. Do not resume a legacy run that lacks it or contains the
 old full-catalog snapshot workflow.
 
-Require `decisionPolicyRevision: "evidence-grounded-v2"` before `next` or `record`. Runs reported
-as `legacy-v1` are audit-only: run `audit`, preserve their append-only artifacts, and initialize a
-new run for replacement decisions.
+Require `decisionPolicyRevision: "evidence-claims-v3"` before `next` or `record`. Runs reported as
+`legacy-v1` or `evidence-grounded-v2` are audit-only: run `audit`, preserve their append-only
+artifacts, and initialize a new run for replacement decisions.
 
 ## Enforce boundaries
 
@@ -82,11 +82,11 @@ For each returned packet, decide only IDs in `undecidedSourceUnitIds`:
 3. Prefer a richer multilingual target only when stored evidence proves the same work.
 4. Choose exactly one of `keep`, `merge`, `soft_delete`, `revise`, or `review`.
 5. Cite only Unit IDs inside the packet evidence closure.
-6. Add typed `citations` whose excerpts occur exactly in stored packet fields. Cite the source for
-   every disposition and both source and target for `merge`.
-7. Mention at least one cited excerpt in the factual explanation. For `review`, add typed
-   `uncertainties` describing the unresolved question and related packet Unit IDs.
-8. Keep the explanation under 500 characters; do not expose hidden reasoning.
+6. Add typed `citations` whose excerpts occur exactly in stored packet fields.
+7. For `keep`, `merge`, `soft_delete`, or `revise`, add English `basis` codes and link each one to
+   the citations that prove it with `citationIndexes`.
+8. For `review`, add typed `uncertainties`, related packet Unit IDs, and citation indexes. Do not
+   generate routine prose. Add a concise `note` only for an explicit `other` code.
 9. Copy the exact packet/hash/part/source values and record the actual model identity.
 
 Write only the current batch's decision array under `.temp/`, then run:
@@ -96,8 +96,9 @@ bun run reconcile record --run <run-id> --file .temp\decisions.json
 ```
 
 Delete only that temporary input after successful recording. Verify the decision count increased
-by exactly the recorded amount. A repeated-explanation or blanket-review rejection is a quality
-stop; inspect the current packet part rather than altering dispositions to satisfy the gate.
+by exactly the recorded amount. An unsupported evidence claim, unlinked citation, or
+blanket-review rejection is a quality stop; inspect the current packet part rather than altering
+dispositions to satisfy the gate.
 
 ## Run a bounded rehearsal
 
@@ -110,7 +111,7 @@ otherwise use `rehearsal-online-<count>-<UTC YYYYMMDD>`. Resume only an online-b
    only when no undecided packet remains.
 4. Decide and record only as many sources as remain to reach the target. Leaving extra already-
    fetched packets undecided is valid.
-5. Use prompt revision `bounded-online-rehearsal-v3`; record the real agent surface and exact model.
+5. Use prompt revision `bounded-online-rehearsal-v4`; record the real agent surface and exact model.
 6. After each completed packet part, run `audit` and stop if it reports `failed`.
 7. Continue until the decision count equals the target, then run checks, audit, and final status.
 8. Do not run `plan` for an intentionally partial rehearsal.

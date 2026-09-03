@@ -116,9 +116,6 @@ test("fixture run reaches a validated manifest without an apply surface", async 
 				actor: { kind: "codex", model: "fixture", promptRevision: "decision-policy-v2" },
 				confidence: "high",
 				reason: "query_fragment",
-				explanation:
-					'The stored title "天蚕土豆最新" describes an author update rather than a Book identity.',
-				evidenceUnitIds: [SourceId],
 				citations: [
 					{
 						unitId: SourceId,
@@ -126,6 +123,7 @@ test("fixture run reaches a validated manifest without an apply surface", async 
 						excerpt: "天蚕土豆最新",
 					},
 				],
+				basis: [{ code: "query_like_title", citationIndexes: [0] }],
 				disposition: "soft_delete",
 			},
 		]);

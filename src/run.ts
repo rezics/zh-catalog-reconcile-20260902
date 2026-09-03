@@ -1,7 +1,12 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { type RunConfig, RunConfigSchema, SchemaVersion } from "./contracts.ts";
+import {
+	CurrentDecisionPolicyRevision,
+	type RunConfig,
+	RunConfigSchema,
+	SchemaVersion,
+} from "./contracts.ts";
 import { appendRunEvent, nowIso, pathExists, runDirectory, writeJsonAtomic } from "./io.ts";
 
 export type InitializeRunInput = {
@@ -30,7 +35,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		networkPolicy: "rezics-only-no-external-metadata",
 		evidenceMode: "online-batched",
 		applyState: "locked",
-		decisionPolicyRevision: "evidence-grounded-v2",
+		decisionPolicyRevision: CurrentDecisionPolicyRevision,
 		onlineBatchSize: 20,
 		maxCandidatesPerPacket: 20,
 	});

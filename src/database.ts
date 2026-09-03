@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
+	CurrentDecisionPolicyRevision,
 	type Inventory,
 	InventorySchema,
 	RawBookEvidenceSchema,
@@ -170,7 +171,7 @@ function numeric(value: unknown, field: string): number {
 }
 
 export async function captureInventory(config: RunConfig): Promise<Inventory> {
-	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+	if (config.decisionPolicyRevision !== CurrentDecisionPolicyRevision)
 		throw new Error(
 			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
 		);

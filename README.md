@@ -36,11 +36,12 @@ AI work happens only after the database transaction is closed. The repository st
 packets actually considered, their hashes, decisions, checkpoints, and event logs. It does not
 create `snapshot/books.jsonl` or another complete local catalog export.
 
-New runs use the `evidence-grounded-v2` decision policy. Every decision must cite an exact excerpt
-from a stored packet field, and the explanation must mention at least one cited excerpt. Review
-decisions must also record the unresolved question. Repeated explanations and complete packet
-parts classified uniformly as low-confidence insufficient-evidence reviews fail closed. Runs made
-before this policy remain readable through `status` and `audit`, but cannot be resumed or planned.
+New runs use the `evidence-claims-v3` decision policy. Routine decisions contain typed English
+`basis` codes instead of generated prose. Every basis code points to exact stored citations by
+index, and the validator proves that the cited Unit and field can support that claim. Reviews use
+typed uncertainties linked to citations. A concise `note` is allowed only when an `other` code is
+unavoidable. Earlier decision contracts remain readable through `status` and `audit`, but cannot
+be resumed or planned.
 
 ## Repository roles
 

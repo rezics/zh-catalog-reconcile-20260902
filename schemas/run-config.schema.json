@@ -89,7 +89,8 @@
       "type": "string",
       "enum": [
         "legacy-v1",
-        "evidence-grounded-v2"
+        "evidence-grounded-v2",
+        "evidence-claims-v3"
       ]
     },
     "onlineBatchSize": {

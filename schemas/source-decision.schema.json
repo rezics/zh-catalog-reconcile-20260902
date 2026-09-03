@@ -72,21 +72,6 @@
             "low"
           ]
         },
-        "explanation": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "evidenceUnitIds": {
-          "minItems": 1,
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        },
         "citations": {
           "minItems": 1,
           "maxItems": 20,
@@ -132,6 +117,11 @@
             "additionalProperties": false
           }
         },
+        "note": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 240
+        },
         "disposition": {
           "type": "string",
           "const": "keep"
@@ -139,6 +129,55 @@
         "reason": {
           "type": "string",
           "const": "distinct_work"
+        },
+        "basis": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "booklike_title",
+                  "synopsis_describes_work",
+                  "author_attribution_present",
+                  "identifier_present",
+                  "distinct_candidate_evidence",
+                  "same_title",
+                  "title_variant_same_work",
+                  "same_synopsis",
+                  "same_attribution",
+                  "same_identifier",
+                  "query_like_title",
+                  "question_like_title",
+                  "character_identity",
+                  "person_or_entity_identity",
+                  "malformed_metadata",
+                  "placeholder_metadata",
+                  "non_book_identity",
+                  "metadata_correction_supported",
+                  "attribution_correction_supported"
+                ]
+              },
+              "citationIndexes": {
+                "minItems": 1,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 19
+                }
+              }
+            },
+            "required": [
+              "code",
+              "citationIndexes"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -151,11 +190,10 @@
         "decidedAt",
         "actor",
         "confidence",
-        "explanation",
-        "evidenceUnitIds",
         "citations",
         "disposition",
-        "reason"
+        "reason",
+        "basis"
       ],
       "additionalProperties": false
     },
@@ -230,21 +268,6 @@
             "low"
           ]
         },
-        "explanation": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "evidenceUnitIds": {
-          "minItems": 1,
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        },
         "citations": {
           "minItems": 1,
           "maxItems": 20,
@@ -290,6 +313,11 @@
             "additionalProperties": false
           }
         },
+        "note": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 240
+        },
         "disposition": {
           "type": "string",
           "const": "merge"
@@ -297,6 +325,55 @@
         "reason": {
           "type": "string",
           "const": "duplicate_identity"
+        },
+        "basis": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "booklike_title",
+                  "synopsis_describes_work",
+                  "author_attribution_present",
+                  "identifier_present",
+                  "distinct_candidate_evidence",
+                  "same_title",
+                  "title_variant_same_work",
+                  "same_synopsis",
+                  "same_attribution",
+                  "same_identifier",
+                  "query_like_title",
+                  "question_like_title",
+                  "character_identity",
+                  "person_or_entity_identity",
+                  "malformed_metadata",
+                  "placeholder_metadata",
+                  "non_book_identity",
+                  "metadata_correction_supported",
+                  "attribution_correction_supported"
+                ]
+              },
+              "citationIndexes": {
+                "minItems": 1,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 19
+                }
+              }
+            },
+            "required": [
+              "code",
+              "citationIndexes"
+            ],
+            "additionalProperties": false
+          }
         },
         "targetUnitId": {
           "type": "string",
@@ -314,11 +391,10 @@
         "decidedAt",
         "actor",
         "confidence",
-        "explanation",
-        "evidenceUnitIds",
         "citations",
         "disposition",
         "reason",
+        "basis",
         "targetUnitId"
       ],
       "additionalProperties": false
@@ -394,21 +470,6 @@
             "low"
           ]
         },
-        "explanation": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "evidenceUnitIds": {
-          "minItems": 1,
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        },
         "citations": {
           "minItems": 1,
           "maxItems": 20,
@@ -454,6 +515,11 @@
             "additionalProperties": false
           }
         },
+        "note": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 240
+        },
         "disposition": {
           "type": "string",
           "const": "soft_delete"
@@ -468,6 +534,55 @@
             "placeholder",
             "other"
           ]
+        },
+        "basis": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "booklike_title",
+                  "synopsis_describes_work",
+                  "author_attribution_present",
+                  "identifier_present",
+                  "distinct_candidate_evidence",
+                  "same_title",
+                  "title_variant_same_work",
+                  "same_synopsis",
+                  "same_attribution",
+                  "same_identifier",
+                  "query_like_title",
+                  "question_like_title",
+                  "character_identity",
+                  "person_or_entity_identity",
+                  "malformed_metadata",
+                  "placeholder_metadata",
+                  "non_book_identity",
+                  "metadata_correction_supported",
+                  "attribution_correction_supported"
+                ]
+              },
+              "citationIndexes": {
+                "minItems": 1,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 19
+                }
+              }
+            },
+            "required": [
+              "code",
+              "citationIndexes"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -480,11 +595,10 @@
         "decidedAt",
         "actor",
         "confidence",
-        "explanation",
-        "evidenceUnitIds",
         "citations",
         "disposition",
-        "reason"
+        "reason",
+        "basis"
       ],
       "additionalProperties": false
     },
@@ -559,21 +673,6 @@
             "low"
           ]
         },
-        "explanation": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "evidenceUnitIds": {
-          "minItems": 1,
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        },
         "citations": {
           "minItems": 1,
           "maxItems": 20,
@@ -619,6 +718,11 @@
             "additionalProperties": false
           }
         },
+        "note": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 240
+        },
         "disposition": {
           "type": "string",
           "const": "revise"
@@ -629,6 +733,55 @@
             "wrong_attribution",
             "wrong_metadata"
           ]
+        },
+        "basis": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "booklike_title",
+                  "synopsis_describes_work",
+                  "author_attribution_present",
+                  "identifier_present",
+                  "distinct_candidate_evidence",
+                  "same_title",
+                  "title_variant_same_work",
+                  "same_synopsis",
+                  "same_attribution",
+                  "same_identifier",
+                  "query_like_title",
+                  "question_like_title",
+                  "character_identity",
+                  "person_or_entity_identity",
+                  "malformed_metadata",
+                  "placeholder_metadata",
+                  "non_book_identity",
+                  "metadata_correction_supported",
+                  "attribution_correction_supported"
+                ]
+              },
+              "citationIndexes": {
+                "minItems": 1,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 19
+                }
+              }
+            },
+            "required": [
+              "code",
+              "citationIndexes"
+            ],
+            "additionalProperties": false
+          }
         },
         "patches": {
           "minItems": 1,
@@ -951,11 +1104,10 @@
         "decidedAt",
         "actor",
         "confidence",
-        "explanation",
-        "evidenceUnitIds",
         "citations",
         "disposition",
         "reason",
+        "basis",
         "patches"
       ],
       "additionalProperties": false
@@ -1031,21 +1183,6 @@
             "low"
           ]
         },
-        "explanation": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "evidenceUnitIds": {
-          "minItems": 1,
-          "maxItems": 50,
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          }
-        },
         "citations": {
           "minItems": 1,
           "maxItems": 20,
@@ -1091,6 +1228,11 @@
             "additionalProperties": false
           }
         },
+        "note": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 240
+        },
         "disposition": {
           "type": "string",
           "const": "review"
@@ -1120,10 +1262,15 @@
                   "other"
                 ]
               },
-              "detail": {
-                "type": "string",
-                "minLength": 8,
-                "maxLength": 240
+              "citationIndexes": {
+                "minItems": 1,
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 19
+                }
               },
               "relatedUnitIds": {
                 "maxItems": 20,
@@ -1137,7 +1284,7 @@
             },
             "required": [
               "kind",
-              "detail",
+              "citationIndexes",
               "relatedUnitIds"
             ],
             "additionalProperties": false
@@ -1154,8 +1301,6 @@
         "decidedAt",
         "actor",
         "confidence",
-        "explanation",
-        "evidenceUnitIds",
         "citations",
         "disposition",
         "reason",

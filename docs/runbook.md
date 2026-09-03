@@ -43,9 +43,10 @@ bun run reconcile init `
 ```
 
 Initialization is offline and writes `evidenceMode: "online-batched"` with `applyState: "locked"`.
-It also writes `decisionPolicyRevision: "evidence-grounded-v2"`. Do not resume a run reported as
-`legacy-v1`, a run that lacks the online evidence mode, or a run containing
-`snapshot/books.jsonl`. Legacy decision runs may only be inspected with `status` and `audit`.
+It also writes `decisionPolicyRevision: "evidence-claims-v3"`. Do not resume a run reported as
+`legacy-v1` or `evidence-grounded-v2`, a run that lacks the online evidence mode, or a run
+containing `snapshot/books.jsonl`. Older decision runs may only be inspected with `status` and
+`audit`.
 
 ## 4. Capture inventory
 
@@ -78,9 +79,11 @@ Delete only the temporary decision input after successful recording. Repeat `nex
 The runner fetches another online page only after all current packets are decided, providing
 backpressure to production.
 
-Each decision must follow the repository decision template: cite exact stored excerpts, mention a
-citation in the explanation, and include typed uncertainties for `review`. `record` rejects three
-or more repeated explanations in a packet part and pauses a complete blanket-review part.
+Each decision must follow the repository decision template. Routine actions use typed English
+`basis` codes whose `citationIndexes` point into the exact stored citations. Reviews use typed
+uncertainties with the same linkage. Do not write an explanation; a concise `note` is accepted
+only for an explicit `other` code. `record` rejects unsupported claim/field combinations,
+unreferenced citations, insufficient keep/merge proof, and complete blanket-review parts.
 
 ## 6. Validate and plan actions
 

@@ -7,6 +7,31 @@ Owner repository: `rezics/zh-catalog-reconcile-20260902`
 Production contract observed: REZICS server `v1.7.0` surface on 2026-09-02; verify the immutable
 server image digest and database migration head again before any apply phase.
 
+## Canonical plan and current run
+
+This `PLAN.md` is the repository's single authoritative work plan. The repository Skill,
+architecture, decision policy, decision template, and runbook are supporting contracts and
+procedures; they are not separate plans.
+
+The current replacement execution is `full-online-luna-v3-20260904`: a fresh run from the
+beginning with REZICS reference `v1.7.0`, cutoff `2026-09-02T16:00:00.000Z`, page size 64,
+`evidence-claims-v3`, and the `full-online-luna-v3` worker protocol. It must use no source-start
+cursor and no `--after-run`. Initialize it only if that run ID does not already exist; otherwise,
+verify the persisted configuration before resuming. The exact guarded commands are maintained in
+[`docs/runbook.md`](./docs/runbook.md).
+
+Preserve historical artifacts but never resume or use them to skip source ranges:
+
+- `rehearsal-online-10000-after-1000-20260903` contains untrusted deterministic decisions,
+  including known false soft-deletes.
+- `full-online-luna-20260904` used the superseded v1 proposal protocol.
+- `full-online-luna-v2-20260904` captured 64 packets and recorded zero decisions before the v2
+  citation-linkage contract failed.
+
+Run until the fixed-cutoff population has exact decision coverage, unless the operator stops it or
+a safety, quality, connection, or allowance failure requires a resumable stop. Completion ends at
+a validated manifest; production mutation remains out of scope.
+
 ## Objective
 
 Reconcile published REZICS Books whose current complete metadata-localization language set is

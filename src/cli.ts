@@ -19,7 +19,8 @@ Commands:
   probe      --run ID [--online-batch-size N]  (read-only timings and EXPLAIN; no checkpoint writes)
   next       --run ID [--limit N]  (fetches the next online batch when needed)
   record     --run ID --file PATH
-  work       --run ID [--concurrency N] [--packets-per-worker N] [--progress-every N]
+  work       --run ID [--concurrency N] [--packets-per-worker N] [--max-attempts N]
+             [--progress-every N]
   status     --run ID
   audit      --run ID
   plan       --run ID
@@ -139,6 +140,7 @@ async function main(): Promise<void> {
 				"--run",
 				"--concurrency",
 				"--packets-per-worker",
+				"--max-attempts",
 				"--progress-every",
 			]);
 			for (const key of values.keys())
@@ -154,6 +156,7 @@ async function main(): Promise<void> {
 						concurrency: integerOption(values, "--concurrency") ?? WorkDefaults.concurrency,
 						packetsPerWorker:
 							integerOption(values, "--packets-per-worker") ?? WorkDefaults.packetsPerWorker,
+						maxAttempts: integerOption(values, "--max-attempts") ?? WorkDefaults.maxAttempts,
 						progressEvery: integerOption(values, "--progress-every") ?? WorkDefaults.progressEvery,
 						signal: controller.signal,
 						onProgress: (progress) => print({ progress }),

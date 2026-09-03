@@ -102,6 +102,7 @@ bun run reconcile work `
   --run full-online-luna-v3-20260904 `
   --concurrency 32 `
   --packets-per-worker 2 `
+  --max-attempts 5 `
   --progress-every 1000
 ```
 
@@ -142,6 +143,7 @@ bun run reconcile work \
   --run full-online-luna-v3-20260904 \
   --concurrency 32 \
   --packets-per-worker 2 \
+  --max-attempts 5 \
   --progress-every 100
 ```
 
@@ -161,10 +163,12 @@ base-table/index traversal exceeding the candidate bound, considering filtered r
 rounding. Investigate broad scans, temporary spills, and timeouts before starting work; one sample
 is not a p95 benchmark or proof of the search function's internal plan.
 
-The `work.started` event records configured and maximum effective parallelism. With a full
+The `work.started` event records configured retries and maximum effective parallelism. With a full
 64-source page, 32 requests carry two packets each; tail pages use fewer requests. Database
 capture and recording still have one owner. `--progress-every 100` controls reporting only, not
-the number of decisions or duration of the run.
+the number of decisions or duration of the run. `--max-attempts` is bounded from 1 through 5 and
+only retries worker execution or rejected proposals; authentication and exhausted allowance still
+stop immediately without recording a fallback decision.
 
 ## 6. Validate and plan actions
 

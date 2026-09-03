@@ -643,6 +643,58 @@ test("coordinator bounds concurrency, preserves assignment order, and retries wo
 	}
 });
 
+test("coordinator accepts five bounded worker attempts", async () => {
+	const runId = `work-five-attempts-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "第五次成功作品");
+		const item: DecisionWorkItem = {
+			packet: buildReviewPacket(config, 0, "第五次成功作品", [source], []),
+			undecidedSourceUnitIds: [source.id],
+		};
+		let attempts = 0;
+		let nextCalls = 0;
+		let recorded = 0;
+		const result = await runConcurrentReconciliation(config, {
+			concurrency: 1,
+			packetsPerWorker: 1,
+			maxAttempts: 5,
+			dependencies: {
+				worker: {
+					async decide() {
+						attempts += 1;
+						if (attempts < 5) throw new Error("transient fixture failure");
+						return [proposal(source)];
+					},
+				},
+				next: async () => (nextCalls++ === 0 ? [item] : []),
+				record: async (_config, decisions) => {
+					recorded += decisions.length;
+					return { recorded: decisions.length };
+				},
+				status: async () => ({
+					packetCount: 1,
+					sourceCount: 1,
+					decisionCount: recorded,
+					remainingCount: 1 - recorded,
+					onlineComplete: nextCalls >= 2,
+				}),
+				audit: async () => report(runId, recorded),
+			},
+		});
+		expect(attempts).toBe(5);
+		expect(result.workerRetries).toBe(4);
+		expect(recorded).toBe(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("coordinator rejects a run without the current worker protocol before capture", async () => {
 	const runId = `work-unpinned-${Date.now()}`;
 	const directory = runDirectory(runId);

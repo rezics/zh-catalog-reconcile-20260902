@@ -39,6 +39,7 @@ import {
 export const WorkDefaults = {
 	concurrency: 32,
 	packetsPerWorker: 2,
+	maxAttempts: 3,
 	progressEvery: 1_000,
 } as const;
 
@@ -327,7 +328,11 @@ export async function runConcurrentReconciliation(
 		"packetsPerWorker",
 		5,
 	);
-	const maxAttempts = positiveBoundedInteger(options.maxAttempts ?? 3, "maxAttempts", 5);
+	const maxAttempts = positiveBoundedInteger(
+		options.maxAttempts ?? WorkDefaults.maxAttempts,
+		"maxAttempts",
+		5,
+	);
 	const progressEvery = positiveBoundedInteger(
 		options.progressEvery ?? WorkDefaults.progressEvery,
 		"progressEvery",
@@ -365,6 +370,7 @@ export async function runConcurrentReconciliation(
 			workerProtocol: CurrentLunaWorkerProtocol,
 			concurrency,
 			packetsPerWorker,
+			maxAttempts,
 			onlineBatchSize: config.onlineBatchSize,
 			maximumActiveRequests: Math.min(
 				concurrency,

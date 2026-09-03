@@ -251,6 +251,10 @@ packet and exact citation excerpts for audit.
 
 Validated decisions completed before another worker in the same part exhausts retries are appended
 before the run fails, so a resume does not recompute successful semantic work.
+For citation-only model transcription failures, the coordinator may restore a full stored title
+only when its normalized value is the unique equal-length one-character near match for the cited
+Unit and title field; the restored citation must still pass the ordinary validator. Stored synopsis
+text may support `title_variant_same_work` only when it explicitly states the alternate title.
 
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
 decision request, 20 packets per guarded classification request, and eight active packet parts. The

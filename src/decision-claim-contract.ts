@@ -37,6 +37,11 @@ export const TitleFieldValues = [
 	"alias",
 ] as const satisfies readonly DecisionEvidenceCitation["field"][];
 
+export const TitleVariantEvidenceFieldValues = [
+	...TitleFieldValues,
+	...SynopsisFieldValues,
+] as const satisfies readonly DecisionEvidenceCitation["field"][];
+
 export const CorrectionEvidenceFieldValues = [
 	...IdentityEvidenceFieldValues,
 	"book_release_status",
@@ -79,8 +84,9 @@ export const BasisClaimContracts = {
 	},
 	title_variant_same_work: {
 		dispositions: ["merge"],
-		citationFields: TitleFieldValues,
+		citationFields: TitleVariantEvidenceFieldValues,
 		citationUnitRule: sourceAndTarget,
+		note: "Synopsis fields may be used only when their stored text explicitly states the alternate title.",
 	},
 	same_synopsis: {
 		dispositions: ["merge"],

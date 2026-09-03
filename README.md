@@ -47,7 +47,8 @@ The `work` command is the full-corpus inference path. One coordinator owns produ
 recording while bounded ephemeral Codex workers run `gpt-5.6-luna` concurrently. Workers return
 typed proposals with citations nested in their basis or uncertainty; the coordinator supplies
 packet identity and actor fields, derives the persisted citation indexes, validates every proposal,
-and records the part. Total work is not count-limited.
+and records the part. A unique equal-length one-character full-title transcription near miss may
+be restored to the stored title before the same validator runs. Total work is not count-limited.
 
 ## Repository roles
 

@@ -40,13 +40,15 @@ setting.
 Workers attach each exact citation directly to the typed basis or uncertainty it supports. The
 coordinator deterministically deduplicates citations and assigns the zero-based indexes used by
 the persisted decision schema. Workers never manage a separate citation array, so an unlinked
-citation cannot cross the proposal boundary. The v5 full-decision prompt renders the same basis claim contract
+citation cannot cross the proposal boundary. The v6 full-decision prompt renders the same basis claim contract
 used by deterministic validation, including allowed fields and required source, target, or
 non-source-candidate roles. Validation failures are retried with a bounded typed category and
 issue code; the feedback never changes a disposition or substitutes deterministic catalog
 heuristics. A terminal worker failure records only bounded failure and feedback codes, part
-number, and request count; raw prompts, responses, Unit IDs, and citation excerpts are not logged
-or printed.
+number, and request count; raw prompts, responses, Unit IDs, and citation excerpts are not logged,
+persisted, or printed. The coordinator repairs only a unique equal-length, one-character full-title
+citation near miss back to the stored title and then runs the unchanged validator. Stored synopsis
+text may support a title-variant claim only when the text itself states the alternate title.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

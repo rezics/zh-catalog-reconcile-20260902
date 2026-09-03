@@ -326,6 +326,100 @@ test("proposal compilation owns immutable envelope fields and rejects incomplete
 	}
 });
 
+test("proposal compilation repairs a unique one-character full-title citation near miss", async () => {
+	const runId = `proposal-title-near-miss-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "赢彩票");
+		const packet = buildReviewPacket(config, 0, "赢彩票", [source], []);
+		const nearMiss = proposal(source);
+		if (nearMiss.disposition !== "keep") throw new Error("Fixture proposal must be keep");
+		nearMiss.basis[0]?.citations.splice(0, 1, {
+			unitId: source.id,
+			field: "localization_title",
+			excerpt: "中彩票",
+		});
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[nearMiss],
+		);
+		expect(decision?.citations[0]?.excerpt).toBe("赢彩票");
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("title variants may cite stored synopsis text that explicitly states the alternate title", async () => {
+	const runId = `proposal-title-variant-synopsis-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "原名");
+		const targetFixture = sourceBook(randomUUID(), "人物名");
+		const { evidenceHash: _evidenceHash, ...targetWithoutHash } = targetFixture;
+		const targetUnhashed = {
+			...targetWithoutHash,
+			localizations: targetFixture.localizations.map((localization) => ({
+				...localization,
+				summary: "小说别名：原名。一部具有完整人物与情节设定的小说。",
+			})),
+		};
+		const target = BookEvidenceSchema.parse({
+			...targetUnhashed,
+			evidenceHash: sha256(targetUnhashed),
+		});
+		const packet = buildReviewPacket(config, 0, "原名", [source], [target]);
+		const mergeProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: target.id,
+			basis: [
+				{
+					code: "title_variant_same_work",
+					citations: [
+						{ unitId: source.id, field: "localization_title", excerpt: "原名" },
+						{
+							unitId: target.id,
+							field: "localization_summary",
+							excerpt: "小说别名：原名",
+						},
+					],
+				},
+				{
+					code: "same_synopsis",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "localization_summary" as const,
+						excerpt: "一部具有完整人物与情节设定的小说。",
+					})),
+				},
+			],
+		};
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[mergeProposal],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("proposal compilation deduplicates claim-local citations without losing linkage", async () => {
 	const runId = `proposal-deduplicate-${Date.now()}`;
 	const directory = runDirectory(runId);

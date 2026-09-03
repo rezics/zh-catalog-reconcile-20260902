@@ -119,12 +119,70 @@ function positiveBoundedInteger(value: number, name: string, maximum: number): n
 	return value;
 }
 
+function normalizedCitationText(value: string): string {
+	return value.normalize("NFKC").toLocaleLowerCase("zh-CN").replace(/\s+/gu, " ").trim();
+}
+
+function differsByOneCharacter(left: string, right: string): boolean {
+	const leftCharacters = [...left];
+	const rightCharacters = [...right];
+	if (leftCharacters.length !== rightCharacters.length || leftCharacters.length < 2) return false;
+	let differences = 0;
+	for (let index = 0; index < leftCharacters.length; index += 1) {
+		if (leftCharacters[index] === rightCharacters[index]) continue;
+		differences += 1;
+		if (differences > 1) return false;
+	}
+	return differences === 1;
+}
+
+function repairNearMissTitleCitation(
+	packet: ReviewPacket,
+	citation: DecisionEvidenceCitation,
+): DecisionEvidenceCitation {
+	if (citation.field !== "localization_title") return citation;
+	const book = packet.candidates.find(({ id }) => id === citation.unitId);
+	if (!book) return citation;
+	const excerpt = normalizedCitationText(citation.excerpt);
+	const titles = book.localizations.flatMap(({ title }) => (title === null ? [] : [title]));
+	if (titles.some((title) => normalizedCitationText(title).includes(excerpt))) return citation;
+	const nearMatches = titles.filter((title) =>
+		differsByOneCharacter(normalizedCitationText(title), excerpt),
+	);
+	const replacement = nearMatches.length === 1 ? nearMatches[0] : undefined;
+	return replacement === undefined ? citation : { ...citation, excerpt: replacement };
+}
+
+function repairNearMissTitleCitations(
+	packet: ReviewPacket,
+	proposal: DecisionProposal,
+): DecisionProposal {
+	if (proposal.disposition === "review")
+		return {
+			...proposal,
+			uncertainties: proposal.uncertainties.map((uncertainty) => ({
+				...uncertainty,
+				citations: uncertainty.citations.map((citation) =>
+					repairNearMissTitleCitation(packet, citation),
+				),
+			})),
+		};
+	return {
+		...proposal,
+		basis: proposal.basis.map((basis) => ({
+			...basis,
+			citations: basis.citations.map((citation) => repairNearMissTitleCitation(packet, citation)),
+		})),
+	};
+}
+
 function proposalDecision(
 	config: RunConfig,
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
 	promptRevision: string,
 ): SourceDecision {
+	const repairedProposal = repairNearMissTitleCitations(packet, proposal);
 	const citations: DecisionEvidenceCitation[] = [];
 	const citationIndexes = new Map<string, number>();
 	const linkCitations = (claimCitations: readonly DecisionEvidenceCitation[]): number[] => [
@@ -140,7 +198,7 @@ function proposalDecision(
 			}),
 		),
 	];
-	const { note, ...proposalFields } = proposal;
+	const { note, ...proposalFields } = repairedProposal;
 	const semanticFields =
 		proposalFields.disposition === "review"
 			? {

@@ -83,6 +83,7 @@ const config: RunConfig = RunConfigSchema.parse({
 	networkPolicy: "rezics-only-no-external-metadata",
 	evidenceMode: "online-batched",
 	applyState: "locked",
+	decisionPolicyRevision: "evidence-grounded-v2",
 	onlineBatchSize: 20,
 	maxCandidatesPerPacket: 20,
 });
@@ -125,14 +126,39 @@ describe("decision compilation", () => {
 			actor: { kind: "codex", model: "gpt-5", promptRevision: "1" },
 			confidence: "high",
 			reason: "duplicate_identity",
-			explanation: "The source title is a query-like suffix form of the richer stored target.",
+			explanation:
+				'The source title "斗破苍穹萧炎" is a suffix form of the richer stored target "斗破苍穹".',
 			evidenceUnitIds: [SourceId, TargetId],
+			citations: [
+				{
+					unitId: SourceId,
+					field: "localization_title",
+					excerpt: "斗破苍穹萧炎",
+				},
+				{
+					unitId: TargetId,
+					field: "localization_title",
+					excerpt: "斗破苍穹",
+				},
+			],
 			disposition: "merge",
 			targetUnitId: TargetId,
 		});
 		const action = compileDecision(config, packet, decision);
 		expect(action?.kind).toBe("merge");
 		if (action?.kind === "merge") expect(action.targetUnitId).toBe(TargetId);
+
+		const sourceOnlyCitation = SourceDecisionSchema.parse({
+			...decision,
+			citations: [
+				{
+					unitId: SourceId,
+					field: "localization_title",
+					excerpt: "斗破苍穹萧炎",
+				},
+			],
+		});
+		expect(() => compileDecision(config, packet, sourceOnlyCitation)).toThrow("target Unit");
 	});
 
 	test("rejects a merge target absent from the packet", () => {
@@ -149,8 +175,15 @@ describe("decision compilation", () => {
 			actor: { kind: "codex", model: "gpt-5", promptRevision: "1" },
 			confidence: "high",
 			reason: "duplicate_identity",
-			explanation: "Unproved target.",
+			explanation: 'The source title is "斗破苍穹萧炎", but the proposed target is unproved.',
 			evidenceUnitIds: [SourceId],
+			citations: [
+				{
+					unitId: SourceId,
+					field: "localization_title",
+					excerpt: "斗破苍穹萧炎",
+				},
+			],
 			disposition: "merge",
 			targetUnitId: TargetId,
 		});

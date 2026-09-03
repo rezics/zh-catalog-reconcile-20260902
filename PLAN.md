@@ -32,6 +32,9 @@ online from REZICS; do not retrieve external metadata or copy the complete catal
 
 - Record the deployed server image digest, root release tag, database migration head, creation
   cutoff, operator identity, model identity, prompt revision, and repository commit in `run.json`.
+- Require `decisionPolicyRevision: "evidence-grounded-v2"` for every new decision-producing run.
+  Runs without that field are interpreted as `legacy-v1`, remain available for audit, and cannot
+  be resumed or used to generate a manifest. Start a new run rather than rewriting their JSONL.
 - Require `evidenceMode: "online-batched"`. Legacy runs without this field are incompatible and
   must not be resumed.
 - Prefer a dedicated database role with `CONNECT`, catalog `SELECT`, and permission to execute the
@@ -103,6 +106,11 @@ Record the exact public model/version identity and prompt revision.
 Quality gates:
 
 - schema-invalid decision rate: 0%;
+- every decision cites an exact excerpt from stored packet evidence and mentions a citation in its
+  explanation;
+- every `review` records at least one typed unresolved question;
+- repeated explanations within a packet part: 0 groups of three or more;
+- a complete part containing only low-confidence `insufficient_evidence` reviews pauses the run;
 - decision coverage: exactly one per discovered source;
 - non-`zh` mutation-source leakage: 0;
 - merge target outside packet: 0;
@@ -112,6 +120,8 @@ Quality gates:
 ## Phase 4 — manifest generation
 
 - Require the online source cursor to be complete and every discovered source to have one decision.
+- Require `reports/decision-quality.json` to pass. Manifest compilation evaluates quality in the
+  same streaming pass used to compile actions, so it does not add another whole-corpus scan.
 - Compile decisions into typed actions with expected timestamps and deterministic idempotency keys.
 - Produce no action for `keep` or `review`.
 - Mark every revision proposal and medium/low-confidence mutation as requiring human approval.
@@ -175,6 +185,13 @@ growth, and decision backlog. Pause capture when these exceed the approved opera
 
 For the current task, online batches keep database work bounded and eliminate the unnecessary
 complete local catalog copy.
+
+Decision validation keeps at most one packet part (100 sources maximum, 50 candidates per packet)
+in memory. Recording checks only the affected part. `audit` is an optional streaming O(N) pass
+with fixed-size counters and at most 100 sampled issues; manifest generation performs the same
+quality aggregation while already streaming decisions, not as a second pass. At 500,000,000 or
+3,000,000,000 sources, audit and manifest work partition by packet-part range and aggregate their
+fixed-size summaries alongside the packet-storage sharding described above.
 
 ## Completion criteria
 

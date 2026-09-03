@@ -17,6 +17,10 @@ descriptions.
 Use when the source represents a distinct Book and the packet does not prove a correction. Sparse
 metadata alone is not enough to delete a real Book.
 
+The absence of a non-source search candidate is not by itself insufficient evidence. A coherent
+stored title together with a description, summary, attribution, identifier, or other Book-shaped
+metadata can support `keep` when the packet contains no contrary fact.
+
 ### `merge`
 
 Use only when the source and target identify the same work. Prefer a target with `ja` or multiple
@@ -40,6 +44,9 @@ never auto-approved by this repository.
 
 Use whenever evidence is insufficient, candidate identity is ambiguous, or the appropriate
 target/correction is absent from the packet.
+
+Name the unresolved question and any related candidate Unit IDs. Do not use `review` as a generic
+fallback for time limits, output generation failures, or unread evidence; those are run failures.
 
 ## Confidence
 
@@ -65,5 +72,15 @@ Every revision and every medium/low-confidence action requires human approval.
 - `insufficient_evidence`
 - `other`
 
-Explanations must identify concrete stored evidence and remain under 500 characters. Do not
-restate the full description or reveal chain-of-thought.
+Every decision must include `citations`. A citation identifies a candidate Book Unit, a typed
+stored field, and an exact excerpt of at most 240 characters. The excerpt must occur in that field,
+the cited Unit must appear in `evidenceUnitIds`, and the explanation must mention at least one
+cited excerpt. Merge decisions must cite both source and target. Review decisions must include a
+typed `uncertainties` entry. Explanations remain under 500 characters; do not restate the full
+description or reveal chain-of-thought.
+
+Three or more identical explanations within one packet part are rejected. A complete part of at
+least ten decisions containing only low-confidence `insufficient_evidence` reviews is also
+rejected and requires human canary inspection. These are degeneration stops, not disposition
+quotas: never turn an uncertain case into `keep`, `merge`, or `soft_delete` merely to change the
+distribution.

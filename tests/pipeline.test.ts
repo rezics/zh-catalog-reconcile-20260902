@@ -113,11 +113,19 @@ test("fixture run reaches a validated manifest without an apply surface", async 
 				inputHash: pendingPacket.inputHash,
 				sourceUnitId: SourceId,
 				decidedAt: nowIso(),
-				actor: { kind: "codex", model: "fixture", promptRevision: "decision-policy-v1" },
+				actor: { kind: "codex", model: "fixture", promptRevision: "decision-policy-v2" },
 				confidence: "high",
 				reason: "query_fragment",
-				explanation: "The stored title describes an author update rather than a Book identity.",
+				explanation:
+					'The stored title "天蚕土豆最新" describes an author update rather than a Book identity.',
 				evidenceUnitIds: [SourceId],
+				citations: [
+					{
+						unitId: SourceId,
+						field: "localization_title",
+						excerpt: "天蚕土豆最新",
+					},
+				],
 				disposition: "soft_delete",
 			},
 		]);

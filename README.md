@@ -36,6 +36,12 @@ AI work happens only after the database transaction is closed. The repository st
 packets actually considered, their hashes, decisions, checkpoints, and event logs. It does not
 create `snapshot/books.jsonl` or another complete local catalog export.
 
+New runs use the `evidence-grounded-v2` decision policy. Every decision must cite an exact excerpt
+from a stored packet field, and the explanation must mention at least one cited excerpt. Review
+decisions must also record the unresolved question. Repeated explanations and complete packet
+parts classified uniformly as low-confidence insufficient-evidence reviews fail closed. Runs made
+before this policy remain readable through `status` and `audit`, but cannot be resumed or planned.
+
 ## Repository roles
 
 - [`PLAN.md`](./PLAN.md) is the authoritative execution and approval plan.
@@ -60,6 +66,7 @@ Initialize a run without connecting anywhere:
 ```powershell
 bun run reconcile init --run rehearsal-001 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z
 bun run reconcile status --run rehearsal-001
+bun run reconcile audit --run rehearsal-001
 ```
 
 Database commands accept either `REZICS_DATABASE_SECRET_FILE` or a dedicated

@@ -84,6 +84,14 @@
       "type": "string",
       "const": "locked"
     },
+    "decisionPolicyRevision": {
+      "default": "legacy-v1",
+      "type": "string",
+      "enum": [
+        "legacy-v1",
+        "evidence-grounded-v2"
+      ]
+    },
     "onlineBatchSize": {
       "type": "integer",
       "minimum": 1,
@@ -105,6 +113,7 @@
     "networkPolicy",
     "evidenceMode",
     "applyState",
+    "decisionPolicyRevision",
     "onlineBatchSize",
     "maxCandidatesPerPacket"
   ],

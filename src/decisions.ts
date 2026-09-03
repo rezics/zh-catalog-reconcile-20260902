@@ -2,12 +2,19 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+	type PersistedSourceDecision,
+	PersistedSourceDecisionSchema,
 	type ReviewPacket,
 	ReviewPacketSchema,
 	type RunConfig,
 	type SourceDecision,
 	SourceDecisionSchema,
 } from "./contracts.ts";
+import {
+	assertDecisionPartQuality,
+	isEvidenceGroundedDecision,
+	validateDecisionAgainstPacket,
+} from "./decision-quality.ts";
 import {
 	appendJsonLines,
 	appendRunEvent,
@@ -20,53 +27,6 @@ import {
 	withFileLock,
 } from "./io.ts";
 import { captureNextOnlinePacketBatch, readPacketCheckpoint } from "./packets.ts";
-
-function packetEvidenceIds(packet: ReviewPacket): Set<string> {
-	const ids = new Set(packet.candidates.map(({ id }) => id));
-	for (const candidate of packet.candidates)
-		for (const attribution of candidate.attributions) ids.add(attribution.creditedUnitId);
-	return ids;
-}
-
-export function validateDecisionAgainstPacket(
-	config: RunConfig,
-	packet: ReviewPacket,
-	decision: SourceDecision,
-): void {
-	if (decision.runId !== config.runId || packet.runId !== config.runId)
-		throw new Error("Run ID mismatch");
-	if (decision.part !== packet.part) throw new Error("Decision part does not match packet part");
-	if (decision.packetId !== packet.packetId || decision.inputHash !== packet.inputHash)
-		throw new Error("Decision is not bound to the packet hash");
-	if (!packet.sourceUnitIds.includes(decision.sourceUnitId))
-		throw new Error(`Decision source is not a packet source: ${decision.sourceUnitId}`);
-	const source = packet.candidates.find(({ id }) => id === decision.sourceUnitId);
-	if (!source?.sourceEligible)
-		throw new Error(`Decision attempts to mutate a protected source: ${decision.sourceUnitId}`);
-
-	const evidenceIds = packetEvidenceIds(packet);
-	if (!decision.evidenceUnitIds.includes(decision.sourceUnitId))
-		throw new Error("Decision evidence must include the source Unit");
-	for (const evidenceUnitId of decision.evidenceUnitIds)
-		if (!evidenceIds.has(evidenceUnitId))
-			throw new Error(`Decision cites evidence outside the packet: ${evidenceUnitId}`);
-
-	if (decision.disposition === "merge") {
-		if (decision.targetUnitId === decision.sourceUnitId)
-			throw new Error("A Unit cannot merge into itself");
-		if (!packet.candidates.some(({ id }) => id === decision.targetUnitId))
-			throw new Error(`Merge target is outside the packet: ${decision.targetUnitId}`);
-	}
-	if (decision.disposition === "revise") {
-		for (const patch of decision.patches) {
-			for (const evidenceUnitId of patch.evidenceUnitIds)
-				if (!evidenceIds.has(evidenceUnitId))
-					throw new Error(`Revision patch cites evidence outside the packet: ${evidenceUnitId}`);
-			if (patch.kind === "credit_replacement" && !evidenceIds.has(patch.creditedUnitId))
-				throw new Error(`Replacement credit is outside the packet: ${patch.creditedUnitId}`);
-		}
-	}
-}
 
 async function parseDecisionFile(pathInput: string): Promise<SourceDecision[]> {
 	const path = assertPathInsideRepository(pathInput);
@@ -99,21 +59,31 @@ async function loadPacketMap(path: string): Promise<Map<string, ReviewPacket>> {
 	return packets;
 }
 
-async function loadExistingSourceIds(path: string): Promise<Set<string>> {
+async function loadPersistedDecisions(path: string): Promise<PersistedSourceDecision[]> {
+	const decisions: PersistedSourceDecision[] = [];
 	const sourceIds = new Set<string>();
-	if (!(await pathExists(path))) return sourceIds;
-	for await (const decision of readJsonLines(path, SourceDecisionSchema)) {
+	if (!(await pathExists(path))) return decisions;
+	for await (const decision of readJsonLines(path, PersistedSourceDecisionSchema)) {
 		if (sourceIds.has(decision.sourceUnitId))
 			throw new Error(`Duplicate persisted decision for ${decision.sourceUnitId}`);
 		sourceIds.add(decision.sourceUnitId);
+		decisions.push(decision);
 	}
-	return sourceIds;
+	return decisions;
+}
+
+async function loadExistingSourceIds(path: string): Promise<Set<string>> {
+	return new Set((await loadPersistedDecisions(path)).map(({ sourceUnitId }) => sourceUnitId));
 }
 
 export async function recordDecisions(
 	config: RunConfig,
 	decisionPath: string,
 ): Promise<{ readonly recorded: number }> {
+	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+		throw new Error(
+			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
+		);
 	const decisions = await parseDecisionFile(decisionPath);
 	if (decisions.length === 0) throw new Error("Decision file is empty");
 	const incomingSourceIds = new Set<string>();
@@ -131,7 +101,11 @@ export async function recordDecisions(
 		const lockPath = join(runDirectory(config.runId), "decisions", `${partFileName(part)}.lock`);
 		await withFileLock(lockPath, async () => {
 			const packetMap = await loadPacketMap(packetPath);
-			const existing = await loadExistingSourceIds(outputPath);
+			const persisted = await loadPersistedDecisions(outputPath);
+			const existing = new Set(persisted.map(({ sourceUnitId }) => sourceUnitId));
+			const grounded = persisted.filter(isEvidenceGroundedDecision);
+			if (grounded.length !== persisted.length)
+				throw new Error(`Packet part ${part} contains legacy decisions and cannot be resumed`);
 			for (const decision of partDecisions) {
 				if (existing.has(decision.sourceUnitId))
 					throw new Error(`Decision already exists for ${decision.sourceUnitId}`);
@@ -139,10 +113,18 @@ export async function recordDecisions(
 				if (!packet) throw new Error(`Packet not found: ${decision.packetId}`);
 				validateDecisionAgainstPacket(config, packet, decision);
 			}
+			const expectedSourceCount = [...packetMap.values()].reduce(
+				(count, packet) => count + packet.sourceUnitIds.length,
+				0,
+			);
+			assertDecisionPartQuality(part, [...grounded, ...partDecisions], expectedSourceCount);
 			await appendJsonLines(outputPath, partDecisions);
 		});
 	}
-	await appendRunEvent(config.runId, "decisions.recorded", { count: decisions.length });
+	await appendRunEvent(config.runId, "decisions.recorded", {
+		count: decisions.length,
+		decisionPolicyRevision: config.decisionPolicyRevision,
+	});
 	return { recorded: decisions.length };
 }
 
@@ -156,6 +138,10 @@ export async function nextPackets(
 ): Promise<
 	readonly { readonly packet: ReviewPacket; readonly undecidedSourceUnitIds: readonly string[] }[]
 > {
+	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+		throw new Error(
+			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
+		);
 	const pending = await findPendingPackets(config, limit);
 	if (pending.length > 0) return pending;
 	const checkpoint = await readPacketCheckpoint(config);

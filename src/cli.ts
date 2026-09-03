@@ -1,4 +1,5 @@
 import { captureInventory, databaseDoctor } from "./database.ts";
+import { auditDecisionQuality } from "./decision-quality.ts";
 import { nextPackets, recordDecisions, runStatus } from "./decisions.ts";
 import { loadRunConfig } from "./io.ts";
 import { generateManifest } from "./planner.ts";
@@ -14,6 +15,7 @@ Commands:
   next       --run ID [--limit N]  (fetches the next online batch when needed)
   record     --run ID --file PATH
   status     --run ID
+  audit      --run ID
   plan       --run ID
 
 There is intentionally no apply command.
@@ -96,6 +98,12 @@ async function main(): Promise<void> {
 		case "status": {
 			const config = await loadRunConfig(runId);
 			print({ run: config, progress: await runStatus(config) });
+			return;
+		}
+		case "audit": {
+			const report = await auditDecisionQuality(await loadRunConfig(runId), { persist: true });
+			print(report);
+			if (report.status !== "passed") process.exitCode = 2;
 			return;
 		}
 		case "plan": {

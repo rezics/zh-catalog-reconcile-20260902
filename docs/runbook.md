@@ -43,7 +43,9 @@ bun run reconcile init `
 ```
 
 Initialization is offline and writes `evidenceMode: "online-batched"` with `applyState: "locked"`.
-Do not resume a legacy run that lacks this evidence mode or contains `snapshot/books.jsonl`.
+It also writes `decisionPolicyRevision: "evidence-grounded-v2"`. Do not resume a run reported as
+`legacy-v1`, a run that lacks the online evidence mode, or a run containing
+`snapshot/books.jsonl`. Legacy decision runs may only be inspected with `status` and `audit`.
 
 ## 4. Capture inventory
 
@@ -76,16 +78,23 @@ Delete only the temporary decision input after successful recording. Repeat `nex
 The runner fetches another online page only after all current packets are decided, providing
 backpressure to production.
 
+Each decision must follow the repository decision template: cite exact stored excerpts, mention a
+citation in the explanation, and include typed uncertainties for `review`. `record` rejects three
+or more repeated explanations in a packet part and pauses a complete blanket-review part.
+
 ## 6. Validate and plan actions
 
 ```powershell
 bun run reconcile status --run prod-online-20260903
+bun run reconcile audit --run prod-online-20260903
 bun run reconcile plan --run prod-online-20260903
 ```
 
-`plan` refuses while the online source cursor is incomplete, decision coverage is incomplete, or
-any source, target, evidence hash, timestamp, or schema invariant fails. Success writes
-`manifests/actions.jsonl` and `reports/manifest-summary.json`.
+`audit` writes `reports/decision-quality.json` and exits nonzero when quality fails. `plan` refuses
+while the online source cursor is incomplete, decision coverage is incomplete, decision quality
+fails, or any source, target, evidence hash, timestamp, or schema invariant fails. Success writes
+`manifests/actions.jsonl`, `reports/decision-quality.json`, and
+`reports/manifest-summary.json`.
 
 ## 7. Stop
 

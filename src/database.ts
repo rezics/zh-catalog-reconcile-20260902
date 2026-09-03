@@ -170,6 +170,10 @@ function numeric(value: unknown, field: string): number {
 }
 
 export async function captureInventory(config: RunConfig): Promise<Inventory> {
+	if (config.decisionPolicyRevision !== "evidence-grounded-v2")
+		throw new Error(
+			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
+		);
 	const query = await readFile(join(repositoryRoot, "sql", "inventory.sql"), "utf8");
 	const { raw } = await withReadOnlyDatabase(async (queryReadOnly) =>
 		queryReadOnly(async (sql) => {

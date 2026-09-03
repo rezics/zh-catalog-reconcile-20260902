@@ -30,6 +30,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		networkPolicy: "rezics-only-no-external-metadata",
 		evidenceMode: "online-batched",
 		applyState: "locked",
+		decisionPolicyRevision: "evidence-grounded-v2",
 		onlineBatchSize: 20,
 		maxCandidatesPerPacket: 20,
 	});
@@ -42,6 +43,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		cutoff: config.cutoff,
 		rezicsRef: config.rezicsRef,
 		evidenceMode: config.evidenceMode,
+		decisionPolicyRevision: config.decisionPolicyRevision,
 		onlineBatchSize: config.onlineBatchSize,
 		applyState: config.applyState,
 	});

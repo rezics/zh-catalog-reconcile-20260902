@@ -16,12 +16,24 @@ Use one object per source Unit. `record` accepts a JSON array, one JSON object, 
   "actor": {
     "kind": "codex",
     "model": "<exact public model identity>",
-    "promptRevision": "decision-policy-v1"
+    "promptRevision": "decision-policy-v2"
   },
   "confidence": "high",
   "reason": "duplicate_identity",
-  "explanation": "Concrete stored evidence under 500 characters.",
-  "evidenceUnitIds": ["<source UUID>"]
+  "explanation": "The stored title '<exact excerpt>' matches the target title '<exact excerpt>'.",
+  "evidenceUnitIds": ["<source UUID>", "<target UUID>"],
+  "citations": [
+    {
+      "unitId": "<source UUID>",
+      "field": "localization_title",
+      "excerpt": "<exact stored source title>"
+    },
+    {
+      "unitId": "<target UUID>",
+      "field": "localization_title",
+      "excerpt": "<exact stored target title>"
+    }
+  ]
 }
 ```
 
@@ -55,10 +67,20 @@ Add exactly one disposition shape:
 ```
 
 ```json
-{ "disposition": "review" }
+{
+  "disposition": "review",
+  "uncertainties": [
+    {
+      "kind": "candidate_identity_ambiguous",
+      "detail": "The stored titles match, but the stored author credits conflict.",
+      "relatedUnitIds": ["<candidate UUID>"]
+    }
+  ]
+}
 ```
 
 Allowed reasons are defined in `schemas/source-decision.schema.json`. Copy packet identity fields;
-never retype them from memory. A revision value must be directly supported by stored packet
-evidence. The validator checks structure and evidence membership, but semantic truth remains the
-reviewer's responsibility.
+never retype them from memory. Citation excerpts must occur in their named stored fields, and the
+explanation must mention at least one excerpt. A revision value must be directly supported by
+stored packet evidence. The validator checks structure, grounding, and evidence membership;
+semantic truth remains the reviewer and canary evaluation's responsibility.

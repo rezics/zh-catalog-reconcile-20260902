@@ -131,6 +131,9 @@ export const BookEvidenceSchema = RawBookEvidenceSchema.extend({
 	});
 export type BookEvidence = z.infer<typeof BookEvidenceSchema>;
 
+export const DecisionPolicyRevisionSchema = z.enum(["legacy-v1", "evidence-grounded-v2"]);
+export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema>;
+
 export const RunConfigSchema = z
 	.object({
 		schemaVersion: z.literal(SchemaVersion),
@@ -151,6 +154,7 @@ export const RunConfigSchema = z
 		networkPolicy: z.literal("rezics-only-no-external-metadata"),
 		evidenceMode: z.literal("online-batched"),
 		applyState: z.literal("locked"),
+		decisionPolicyRevision: DecisionPolicyRevisionSchema.default("legacy-v1"),
 		onlineBatchSize: z.int().min(1).max(100),
 		maxCandidatesPerPacket: z.int().min(2).max(50),
 	})
@@ -278,7 +282,51 @@ const DecisionActorSchema = z
 	})
 	.strict();
 
-const DecisionBaseFields = {
+export const DecisionEvidenceFieldSchema = z.enum([
+	"localization_title",
+	"localization_summary",
+	"localization_description",
+	"alias",
+	"attribution",
+	"book_release_status",
+	"book_isbn13",
+	"book_publication_date",
+	"book_page_count",
+	"book_word_count",
+	"unit_created_at",
+	"unit_updated_at",
+	"localization_languages",
+	"suspicious_signal",
+]);
+
+export const DecisionEvidenceCitationSchema = z
+	.object({
+		unitId: UuidSchema,
+		field: DecisionEvidenceFieldSchema,
+		excerpt: z.string().trim().min(1).max(240),
+	})
+	.strict();
+export type DecisionEvidenceCitation = z.infer<typeof DecisionEvidenceCitationSchema>;
+
+export const DecisionUncertaintyKindSchema = z.enum([
+	"candidate_identity_ambiguous",
+	"conflicting_stored_evidence",
+	"correction_not_proven",
+	"non_book_status_unclear",
+	"required_target_absent",
+	"other",
+]);
+
+export const DecisionUncertaintySchema = z
+	.object({
+		kind: DecisionUncertaintyKindSchema,
+		detail: z.string().trim().min(8).max(240),
+		relatedUnitIds: z.array(UuidSchema).max(20),
+	})
+	.strict();
+export type DecisionUncertainty = z.infer<typeof DecisionUncertaintySchema>;
+
+const LegacyDecisionBaseFields = {
 	schemaVersion: z.literal(SchemaVersion),
 	runId: RunIdSchema,
 	part: z.int().nonnegative(),
@@ -290,6 +338,11 @@ const DecisionBaseFields = {
 	confidence: DecisionConfidenceSchema,
 	explanation: z.string().min(1).max(500),
 	evidenceUnitIds: z.array(UuidSchema).min(1).max(50),
+} as const;
+
+const DecisionBaseFields = {
+	...LegacyDecisionBaseFields,
+	citations: z.array(DecisionEvidenceCitationSchema).min(1).max(20),
 } as const;
 
 export const RevisionPatchSchema = z.discriminatedUnion("kind", [
@@ -403,10 +456,105 @@ export const SourceDecisionSchema = z.discriminatedUnion("disposition", [
 			...DecisionBaseFields,
 			disposition: z.literal("review"),
 			reason: z.enum(["insufficient_evidence", "other"]),
+			uncertainties: z.array(DecisionUncertaintySchema).min(1).max(10),
 		})
 		.strict(),
 ]);
 export type SourceDecision = z.infer<typeof SourceDecisionSchema>;
+
+export const LegacySourceDecisionSchema = z.discriminatedUnion("disposition", [
+	z
+		.object({
+			...LegacyDecisionBaseFields,
+			disposition: z.literal("keep"),
+			reason: z.literal("distinct_work"),
+		})
+		.strict(),
+	z
+		.object({
+			...LegacyDecisionBaseFields,
+			disposition: z.literal("merge"),
+			reason: z.literal("duplicate_identity"),
+			targetUnitId: UuidSchema,
+		})
+		.strict(),
+	z
+		.object({
+			...LegacyDecisionBaseFields,
+			disposition: z.literal("soft_delete"),
+			reason: z.enum([
+				"query_fragment",
+				"character_as_book",
+				"person_or_entity_as_book",
+				"malformed_scrape",
+				"placeholder",
+				"other",
+			]),
+		})
+		.strict(),
+	z
+		.object({
+			...LegacyDecisionBaseFields,
+			disposition: z.literal("revise"),
+			reason: z.enum(["wrong_attribution", "wrong_metadata"]),
+			patches: z.array(RevisionPatchSchema).min(1).max(20),
+		})
+		.strict(),
+	z
+		.object({
+			...LegacyDecisionBaseFields,
+			disposition: z.literal("review"),
+			reason: z.enum(["insufficient_evidence", "other"]),
+		})
+		.strict(),
+]);
+export type LegacySourceDecision = z.infer<typeof LegacySourceDecisionSchema>;
+
+export const PersistedSourceDecisionSchema = z.union([
+	SourceDecisionSchema,
+	LegacySourceDecisionSchema,
+]);
+export type PersistedSourceDecision = z.infer<typeof PersistedSourceDecisionSchema>;
+
+export const DecisionQualityIssueCodeSchema = z.enum([
+	"legacy_decision_contract",
+	"invalid_decision",
+	"missing_decision",
+	"duplicate_decision",
+	"unexpected_decision",
+	"duplicate_explanation",
+	"blanket_review",
+]);
+
+export const DecisionQualityIssueSchema = z
+	.object({
+		code: DecisionQualityIssueCodeSchema,
+		part: z.int().nonnegative().nullable(),
+		sourceUnitIds: z.array(UuidSchema).max(20),
+		message: z.string().min(1).max(500),
+	})
+	.strict();
+export type DecisionQualityIssue = z.infer<typeof DecisionQualityIssueSchema>;
+
+export const DecisionQualityReportSchema = z
+	.object({
+		schemaVersion: z.literal(SchemaVersion),
+		runId: RunIdSchema,
+		generatedAt: DateTimeSchema,
+		decisionPolicyRevision: DecisionPolicyRevisionSchema,
+		status: z.enum(["passed", "failed"]),
+		sourceCount: z.int().nonnegative(),
+		decisionCount: z.int().nonnegative(),
+		legacyDecisionCount: z.int().nonnegative(),
+		byDisposition: z.record(z.string(), z.int().nonnegative()),
+		byReason: z.record(z.string(), z.int().nonnegative()),
+		byConfidence: z.record(z.string(), z.int().nonnegative()),
+		issueCount: z.int().nonnegative(),
+		issueCounts: z.record(z.string(), z.int().nonnegative()),
+		sampleIssues: z.array(DecisionQualityIssueSchema).max(100),
+	})
+	.strict();
+export type DecisionQualityReport = z.infer<typeof DecisionQualityReportSchema>;
 
 const ManifestBaseFields = {
 	schemaVersion: z.literal(SchemaVersion),
@@ -469,6 +617,7 @@ export const GeneratedSchemas = {
 	"packet-checkpoint": PacketCheckpointSchema,
 	"review-packet": ReviewPacketSchema,
 	"source-decision": SourceDecisionSchema,
+	"decision-quality-report": DecisionQualityReportSchema,
 	"manifest-action": ManifestActionSchema,
 	"run-event": EventSchema,
 } as const;

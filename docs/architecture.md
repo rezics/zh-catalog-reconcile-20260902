@@ -55,6 +55,9 @@ Duplicate validation also accepts an exact long synopsis match, or matching syno
 attribution, when titles differ. Revision values may be linked to a stored identity excerpt that
 contains the replacement value, and non-Book uncertainty may retain contradictory source Book
 evidence instead of discarding it to satisfy the output shape.
+Citation comparison ignores formatting whitespace. An out-of-packet merge target transcription is
+replaced only when the proposal's non-source basis citations identify exactly one packet candidate,
+after which the ordinary binding and claim validation still applies.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

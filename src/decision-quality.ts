@@ -88,7 +88,7 @@ function packetEvidenceIds(packet: ReviewPacket): Set<string> {
 }
 
 function normalizedText(value: string): string {
-	return value.normalize("NFKC").toLocaleLowerCase("zh-CN").replace(/\s+/gu, " ").trim();
+	return value.normalize("NFKC").toLocaleLowerCase("zh-CN").replace(/\s+/gu, "");
 }
 
 function jsonStrings(value: JsonValue): string[] {
@@ -444,14 +444,44 @@ function validateBasis(
 					}),
 				);
 			});
+		const explicitlyStatedTitleVariant = decision.basis
+			.filter(({ code }) => code === "title_variant_same_work")
+			.some(({ citationIndexes }) => {
+				const cited = citationIndexes.flatMap((index) => {
+					const citation = decision.citations[index];
+					return citation === undefined ? [] : [citation];
+				});
+				const sourceTitles = cited
+					.filter(
+						({ unitId, field }) =>
+							unitId === decision.sourceUnitId &&
+							(field === "localization_title" || field === "alias"),
+					)
+					.map(({ excerpt }) => normalizedText(excerpt));
+				const targetStatements = cited
+					.filter(
+						({ unitId, field }) =>
+							unitId === decision.targetUnitId &&
+							(field === "alias" ||
+								field === "localization_summary" ||
+								field === "localization_description"),
+					)
+					.map(({ excerpt }) => normalizedText(excerpt));
+				return sourceTitles.some(
+					(title) =>
+						[...title].length >= 2 &&
+						targetStatements.some((statement) => statement.includes(title)),
+				);
+			});
 		if (
 			!codes.has("same_identifier") &&
 			!stronglyMatchingSynopsis &&
+			!explicitlyStatedTitleVariant &&
 			!(synopsisSupported && attributionSupported) &&
 			!(titleSupported && corroborated)
 		)
 			dispositionEvidenceError(
-				"Merge requires a shared identifier, a strongly matching long synopsis, matching synopsis and attribution, or title correspondence plus synopsis/attribution corroboration",
+				"Merge requires a shared identifier, an explicitly stated title variant, a strongly matching long synopsis, matching synopsis and attribution, or title correspondence plus synopsis/attribution corroboration",
 			);
 	}
 	if (decision.disposition === "soft_delete") {

@@ -49,7 +49,8 @@ typed proposals with citations nested in their basis or uncertainty; the coordin
 packet identity and actor fields, derives the persisted citation indexes, validates every proposal,
 and records the part. A keep proposal's unique equal-length source-title transcription may be
 restored to the stored title before the same validator runs. Long matching synopsis evidence and
-query-title contradictions retain their typed validation rules. Total work is not count-limited.
+query-title contradictions retain their typed validation rules. A merge target typo is restored
+only from one uniquely cited packet candidate. Total work is not count-limited.
 
 ## Repository roles
 

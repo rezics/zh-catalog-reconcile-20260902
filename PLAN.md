@@ -150,8 +150,8 @@ Quality gates:
 - every decision cites exact stored packet evidence;
 - every routine action uses typed English basis codes, each linked to compatible citations;
 - every `keep` cites a Book-like title plus synopsis, attribution, or identifier corroboration;
-- every `merge` cites a shared identifier, a strongly matching long synopsis, matching synopsis
-  and attribution, or title correspondence plus synopsis or attribution;
+- every `merge` cites a shared identifier, an explicitly stated title variant, a strongly matching
+  long synopsis, matching synopsis and attribution, or title correspondence plus corroboration;
 - every `review` records typed uncertainties linked to source and related-candidate citations;
 - free-form notes occur only for an explicit `other` reason or uncertainty;
 - legacy repeated or evidence-substituted explanation templates: 0;
@@ -257,6 +257,9 @@ equal-length stored title selected by a keep proposal's `booklike_title` claim a
 exact substitution within the same proposal; other title citations require a unique one-character
 near match. Every restored citation must still pass the ordinary validator. Stored synopsis text
 may support `title_variant_same_work` only when it explicitly states the alternate title.
+Citation matching ignores formatting whitespace but not other content. When a model transcribes a
+merge target outside the packet, the coordinator may restore it only when all non-source basis
+citations identify exactly one packet candidate; the repaired proposal then passes normal binding.
 
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
 decision request, 20 packets per guarded classification request, and eight active packet parts. The

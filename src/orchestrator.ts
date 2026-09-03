@@ -210,13 +210,38 @@ function repairNearMissTitleCitations(
 	};
 }
 
+function repairMergeTargetUnitId(
+	packet: ReviewPacket,
+	proposal: DecisionProposal,
+): DecisionProposal {
+	if (
+		proposal.disposition !== "merge" ||
+		packet.candidates.some(({ id }) => id === proposal.targetUnitId)
+	)
+		return proposal;
+	const candidateIds = new Set(packet.candidates.map(({ id }) => id));
+	const citedCandidates = new Set(
+		proposal.basis
+			.flatMap(({ citations }) => citations)
+			.map(({ unitId }) => unitId)
+			.filter((unitId) => unitId !== proposal.sourceUnitId && candidateIds.has(unitId)),
+	);
+	const [targetUnitId] = citedCandidates;
+	return citedCandidates.size === 1 && targetUnitId !== undefined
+		? { ...proposal, targetUnitId }
+		: proposal;
+}
+
 function proposalDecision(
 	config: RunConfig,
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
 	promptRevision: string,
 ): SourceDecision {
-	const repairedProposal = repairNearMissTitleCitations(packet, proposal);
+	const repairedProposal = repairNearMissTitleCitations(
+		packet,
+		repairMergeTargetUnitId(packet, proposal),
+	);
 	const citations: DecisionEvidenceCitation[] = [];
 	const citationIndexes = new Map<string, number>();
 	const linkCitations = (claimCitations: readonly DecisionEvidenceCitation[]): number[] => [

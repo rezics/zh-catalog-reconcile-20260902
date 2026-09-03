@@ -123,6 +123,8 @@ by `booklike_title` and propagate that exact substitution within the proposal. O
 require a unique one-character near match. Every repaired proposal still passes the normal validator.
 The validator accepts a strongly matching long synopsis as duplicate proof and permits a
 non-Book uncertainty to cite contradictory source Book evidence.
+It ignores formatting whitespace in citation excerpts and restores an out-of-packet merge target
+only from exactly one non-source candidate cited by the proposal.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
 Historical `full-online-luna-v2`, `full-online-luna-v3`, `full-online-luna-v4`, and
 `full-online-luna-v5` runs remain

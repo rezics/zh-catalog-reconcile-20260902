@@ -355,6 +355,96 @@ test("proposal compilation restores a unique equal-length full-title transformat
 	}
 });
 
+test("citation matching ignores stored formatting whitespace", async () => {
+	const runId = `proposal-citation-whitespace-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const fixture = sourceBook(randomUUID(), "完整作品");
+		const { evidenceHash: _evidenceHash, ...withoutHash } = fixture;
+		const unhashed = {
+			...withoutHash,
+			localizations: fixture.localizations.map((localization) => ({
+				...localization,
+				summary: "一部具有完整 人物与情节设定的小说。",
+			})),
+		};
+		const source = BookEvidenceSchema.parse({ ...unhashed, evidenceHash: sha256(unhashed) });
+		const packet = buildReviewPacket(config, 0, "完整作品", [source], []);
+		const withoutFormattingSpace = proposal(source);
+		if (withoutFormattingSpace.disposition !== "keep")
+			throw new Error("Fixture proposal must be keep");
+		withoutFormattingSpace.basis[1]?.citations.splice(0, 1, {
+			unitId: source.id,
+			field: "localization_summary",
+			excerpt: "一部具有完整人物与情节设定的小说。",
+		});
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[withoutFormattingSpace],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("proposal compilation restores a uniquely cited merge target", async () => {
+	const runId = `proposal-target-repair-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "相同作品");
+		const target = sourceBook(randomUUID(), "相同作品");
+		const packet = buildReviewPacket(config, 0, "相同作品", [source], [target]);
+		const mergeProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: randomUUID(),
+			basis: [
+				{
+					code: "same_title",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "localization_title" as const,
+						excerpt: "相同作品",
+					})),
+				},
+				{
+					code: "same_synopsis",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "localization_summary" as const,
+						excerpt: "一部具有完整人物与情节设定的小说。",
+					})),
+				},
+			],
+		};
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[mergeProposal],
+		);
+		if (decision?.disposition !== "merge") throw new Error("Expected merge decision");
+		expect(decision.targetUnitId).toBe(target.id);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("matching synopsis and attribution can prove a merge when stored titles differ", async () => {
 	const runId = `proposal-content-author-merge-${Date.now()}`;
 	const directory = runDirectory(runId);
@@ -622,14 +712,6 @@ test("title variants may cite stored synopsis text that explicitly states the al
 							excerpt: "小说别名：原名",
 						},
 					],
-				},
-				{
-					code: "same_synopsis",
-					citations: [source, target].map((book) => ({
-						unitId: book.id,
-						field: "localization_summary" as const,
-						excerpt: "一部具有完整人物与情节设定的小说。",
-					})),
 				},
 			],
 		};

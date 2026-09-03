@@ -28,7 +28,7 @@ AI requests `next`
 
 The full-run `work` command preserves a single capture/write path and fans out only model
 inference. One coordinator pipelines at most eight persisted packet parts, performs guarded
-five-source semantic classification, splits every fallback into four-packet work items, runs ephemeral
+20-source semantic classification, splits every fallback into four-packet work items, runs ephemeral
 Luna processes concurrently behind one 128-request semaphore, validates returned proposals per
 source, and records each completed part through one writer. Workers cannot choose run IDs, packet
 hashes, timestamps, or actor

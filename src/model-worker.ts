@@ -322,8 +322,8 @@ export class CodexLunaTriageWorker implements TriageWorker {
 		items: readonly DecisionWorkItem[],
 		options: TriageWorkerOptions = {},
 	): Promise<readonly TriageDecision[]> {
-		if (items.length === 0 || items.length > 5)
-			throw new Error("A Luna triage request must contain 1 through 5 packet work items");
+		if (items.length === 0 || items.length > 20)
+			throw new Error("A Luna triage request must contain 1 through 20 packet work items");
 		return TriageDecisionBatchSchema.parse(
 			await runCodexLunaPrompt(
 				this.#executable,

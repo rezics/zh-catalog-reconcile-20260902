@@ -795,7 +795,7 @@ export type TriageDecision = z.infer<typeof TriageDecisionSchema>;
 
 export const TriageDecisionBatchSchema = z
 	.object({
-		decisions: z.array(TriageDecisionSchema).min(1).max(5),
+		decisions: z.array(TriageDecisionSchema).min(1).max(20),
 	})
 	.strict();
 export type TriageDecisionBatch = z.infer<typeof TriageDecisionBatchSchema>;

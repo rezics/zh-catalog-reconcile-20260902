@@ -136,7 +136,7 @@ set or simulate a durable decision target:
 bun run reconcile work --run <run-id> --concurrency 128 --packets-per-worker 4 --max-attempts 5
 ```
 
-The coordinator alone may capture and record. Guarded five-source Luna classification emits a
+The coordinator alone may capture and record. Guarded 20-source Luna classification emits a
 compact semantic disposition; the coordinator accepts only high-confidence `keep/distinct_work`
 for source-only packets with no stored suspicious signal and mechanically validated
 title-plus-corroboration citations. Every other item goes to an ephemeral full worker.

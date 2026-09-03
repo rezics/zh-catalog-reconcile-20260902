@@ -253,7 +253,7 @@ Validated decisions completed before another worker in the same part exhausts re
 before the run fails, so a resume does not recompute successful semantic work.
 
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
-decision request, five packets per guarded classification request, and eight active packet parts. The
+decision request, 20 packets per guarded classification request, and eight active packet parts. The
 operator's execution host is a Fedora Threadripper 3970X with
 32 cores / 64 threads and 64 GB RAM; the separate database host has 16 cores and 64 GB RAM. These
 are operator-provided specifications, not measured utilization. Workers use ChatGPT authentication,
@@ -273,7 +273,7 @@ contain at most 20 Books including the source. There is one database connection 
 eight-part pipeline, never an unbounded prefetch queue.
 Neither the worker count nor packet batching multiplies database transactions.
 
-The v6 worker first asks Luna for a compact five-way semantic classification in groups of five. A
+The v6 worker first asks Luna for a compact five-way semantic classification in groups of 20. A
 fast-path keep is accepted only when the model reports high-confidence `keep/distinct_work`, the
 packet contains the source and no other candidate, the stored suspicious-signal set is empty, and
 the coordinator can mechanically construct and validate booklike-title plus synopsis, author, or
@@ -330,9 +330,10 @@ for a five-hour run. The first production parts must confirm sustained end-to-en
 pause rather than claim the target if it remains below the threshold.
 
 The v6 guarded classifier was then benchmarked over all 1,920 persisted v3 decisions, again
-without saving prompts or model outputs. It assigned 1,910 sources in 173.261 seconds
-(661.4 assigned sources/minute). The deterministic fast-path guards accepted 1,135 keeps; 1,129
-agreed with the historical keep disposition, for 99.47% precision. The six disagreements are why
+without saving prompts or model outputs. With 20-source requests it assigned 1,780 sources in
+85.003 seconds (1,256.4 assigned sources/minute); seven malformed assignment batches fell back
+safely. The deterministic fast-path guards accepted 1,086 keeps; 1,081 agreed with the historical
+keep disposition, for 99.54% precision. The five disagreements are why
 the classifier is not itself a decision worker: only its narrowly guarded keeps bypass the full
 worker, and every other result falls back. This matches the measured 99.4%–99.7% v5 triage
 precision while raising guarded acceptance from roughly 45% in the v5 production canary to about

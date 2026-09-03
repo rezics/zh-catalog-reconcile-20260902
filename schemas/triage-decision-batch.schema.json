@@ -4,7 +4,7 @@
   "properties": {
     "decisions": {
       "minItems": 1,
-      "maxItems": 5,
+      "maxItems": 20,
       "type": "array",
       "items": {
         "type": "object",

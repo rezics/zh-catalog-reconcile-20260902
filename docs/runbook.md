@@ -114,7 +114,7 @@ then run the same command to resume. Never use a run containing decisions from a
 or prompt revision, and never use `--after-run` to skip an untrusted decision range. Workers force
 ChatGPT login, standard (non-Fast) service, medium reasoning, and a tool-free isolated Codex
 configuration. They never redeem a usage reset; an exhausted allowance is a resumable stop.
-The `full-online-luna-v6` worker protocol first performs guarded five-source semantic
+The `full-online-luna-v6` worker protocol first performs guarded 20-source semantic
 classification, then places citations inside each basis or uncertainty for every fallback full decision; the
 coordinator alone derives the citation indexes stored in final decisions. The worker prompt and
 deterministic validator share one basis claim contract for allowed fields and required Unit roles.
@@ -167,7 +167,7 @@ rounding. Investigate broad scans, temporary spills, and timeouts before startin
 is not a p95 benchmark or proof of the search function's internal plan.
 
 The `work.started` event records configured retries, guarded classification settings, the eight-part
-pipeline window, and maximum effective parallelism. Guarded classification groups five packets, full decisions group
+pipeline window, and maximum effective parallelism. Guarded classification groups 20 packets, full decisions group
 four, and a shared semaphore caps all model requests at 128. Database capture and recording still
 have one owner. `--progress-every 100` controls reporting only, not
 the number of decisions or duration of the run. `--max-attempts` is bounded from 1 through 5 and

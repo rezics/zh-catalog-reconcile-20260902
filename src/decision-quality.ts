@@ -398,11 +398,16 @@ function validateBasis(
 	}
 	if (decision.disposition === "merge") {
 		const titleSupported = codes.has("same_title") || codes.has("title_variant_same_work");
-		const corroborated =
-			codes.has("same_synopsis") || codes.has("same_attribution") || codes.has("same_identifier");
-		if (!codes.has("same_identifier") && !(titleSupported && corroborated))
+		const synopsisSupported = codes.has("same_synopsis");
+		const attributionSupported = codes.has("same_attribution");
+		const corroborated = synopsisSupported || attributionSupported;
+		if (
+			!codes.has("same_identifier") &&
+			!(synopsisSupported && attributionSupported) &&
+			!(titleSupported && corroborated)
+		)
 			dispositionEvidenceError(
-				"Merge requires a shared identifier or title correspondence plus synopsis/attribution corroboration",
+				"Merge requires a shared identifier, matching synopsis and attribution, or title correspondence plus synopsis/attribution corroboration",
 			);
 	}
 	if (decision.disposition === "soft_delete") {

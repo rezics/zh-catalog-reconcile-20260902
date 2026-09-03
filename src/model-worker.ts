@@ -127,7 +127,8 @@ Book (soft_delete), a real Book with a stored-evidence correction (revise), or u
 contradictory evidence semantically. Never classify from punctuation, keywords, description
 length, title similarity, or author equality alone. A question-shaped title with coherent Book
 synopsis or authorship is not a search query merely because it contains a question mark. Merge
-only when the stored evidence proves the same work. Prefer review over an invented fact.
+only when the stored evidence proves the same work. Matching synopsis and attribution can prove
+identity even when stored titles differ. Prefer review over an invented fact.
 Do not use review for unread packets, time limits, output-generation failures, or missing tools;
 those are worker failures, not catalog decisions.
 

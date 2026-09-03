@@ -143,9 +143,10 @@ title-plus-corroboration citations. Every other item goes to an ephemeral full w
 Workers return typed semantic proposals and must not browse or access the database. A
 question-shaped title is not a query merely because it contains punctuation. Resume the same
 command after an operator interruption; do not resume a run whose decisions use another model or
-prompt revision. A unique equal-length one-character full-title citation near miss may be restored
-to stored evidence before the normal validator runs; do not repair other fields or ambiguous
-titles. Workers use ChatGPT login with standard (non-Fast) service and never redeem an
+prompt revision. A keep proposal's unique equal-length source title may be restored from stored
+evidence and its exact substitution propagated within the proposal; other title repairs require a
+unique one-character near match. Do not repair other fields or ambiguous titles. Workers use
+ChatGPT login with standard (non-Fast) service and never redeem an
 account reset. Exhausted allowance is a resumable stop requiring operator action.
 `work` rejects a run that is not pinned to the current worker protocol before it captures or
 decides another packet.

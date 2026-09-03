@@ -46,9 +46,11 @@ non-source-candidate roles. Validation failures are retried with a bounded typed
 issue code; the feedback never changes a disposition or substitutes deterministic catalog
 heuristics. A terminal worker failure records only bounded failure and feedback codes, part
 number, and request count; raw prompts, responses, Unit IDs, and citation excerpts are not logged,
-persisted, or printed. The coordinator repairs only a unique equal-length, one-character full-title
-citation near miss back to the stored title and then runs the unchanged validator. Stored synopsis
-text may support a title-variant claim only when the text itself states the alternate title.
+persisted, or printed. For a keep proposal, the coordinator may restore the unique equal-length
+stored source title selected by `booklike_title` and propagate the exact substitution to title
+citations in that proposal; other title citations require a unique one-character near match. It
+then runs the unchanged validator. Stored synopsis text may support a title-variant claim only
+when the text itself states the alternate title.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

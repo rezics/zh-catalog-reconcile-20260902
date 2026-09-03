@@ -139,13 +139,21 @@ function differsByOneCharacter(left: string, right: string): boolean {
 function repairNearMissTitleCitation(
 	packet: ReviewPacket,
 	citation: DecisionEvidenceCitation,
+	transforms: readonly { readonly from: string; readonly to: string }[],
 ): DecisionEvidenceCitation {
 	if (citation.field !== "localization_title") return citation;
 	const book = packet.candidates.find(({ id }) => id === citation.unitId);
 	if (!book) return citation;
-	const excerpt = normalizedCitationText(citation.excerpt);
+	const transformedExcerpt = transforms.reduce(
+		(value, { from, to }) => value.replaceAll(from, to),
+		citation.excerpt,
+	);
+	const excerpt = normalizedCitationText(transformedExcerpt);
 	const titles = book.localizations.flatMap(({ title }) => (title === null ? [] : [title]));
-	if (titles.some((title) => normalizedCitationText(title).includes(excerpt))) return citation;
+	if (titles.some((title) => normalizedCitationText(title).includes(excerpt)))
+		return transformedExcerpt === citation.excerpt
+			? citation
+			: { ...citation, excerpt: transformedExcerpt };
 	const nearMatches = titles.filter((title) =>
 		differsByOneCharacter(normalizedCitationText(title), excerpt),
 	);
@@ -157,13 +165,37 @@ function repairNearMissTitleCitations(
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
 ): DecisionProposal {
+	const transforms =
+		proposal.disposition === "keep"
+			? proposal.basis
+					.filter(({ code }) => code === "booklike_title")
+					.flatMap(({ citations }) => citations)
+					.flatMap((citation) => {
+						if (citation.field !== "localization_title") return [];
+						const book = packet.candidates.find(({ id }) => id === citation.unitId);
+						if (!book) return [];
+						const titles = [
+							...new Set(
+								book.localizations.flatMap(({ title }) => (title === null ? [] : [title])),
+							),
+						];
+						const title = titles.length === 1 ? titles[0] : undefined;
+						if (
+							title === undefined ||
+							[...normalizedCitationText(title)].length !==
+								[...normalizedCitationText(citation.excerpt)].length
+						)
+							return [];
+						return [{ from: citation.excerpt, to: title }];
+					})
+			: [];
 	if (proposal.disposition === "review")
 		return {
 			...proposal,
 			uncertainties: proposal.uncertainties.map((uncertainty) => ({
 				...uncertainty,
 				citations: uncertainty.citations.map((citation) =>
-					repairNearMissTitleCitation(packet, citation),
+					repairNearMissTitleCitation(packet, citation, transforms),
 				),
 			})),
 		};
@@ -171,7 +203,9 @@ function repairNearMissTitleCitations(
 		...proposal,
 		basis: proposal.basis.map((basis) => ({
 			...basis,
-			citations: basis.citations.map((citation) => repairNearMissTitleCitation(packet, citation)),
+			citations: basis.citations.map((citation) =>
+				repairNearMissTitleCitation(packet, citation, transforms),
+			),
 		})),
 	};
 }

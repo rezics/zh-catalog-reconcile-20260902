@@ -118,8 +118,9 @@ The `full-online-luna-v6` worker protocol first performs guarded 20-source seman
 classification, then places citations inside each basis or uncertainty for every fallback full decision; the
 coordinator alone derives the citation indexes stored in final decisions. The worker prompt and
 deterministic validator share one basis claim contract for allowed fields and required Unit roles.
-The coordinator can correct only a unique equal-length one-character full-title transcription
-near miss back to the stored value; every repaired proposal still passes the normal validator.
+For a keep proposal, the coordinator can restore only the unique equal-length source title selected
+by `booklike_title` and propagate that exact substitution within the proposal. Other title repairs
+require a unique one-character near match. Every repaired proposal still passes the normal validator.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
 Historical `full-online-luna-v2`, `full-online-luna-v3`, `full-online-luna-v4`, and
 `full-online-luna-v5` runs remain

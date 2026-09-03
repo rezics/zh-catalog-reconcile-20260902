@@ -150,7 +150,8 @@ Quality gates:
 - every decision cites exact stored packet evidence;
 - every routine action uses typed English basis codes, each linked to compatible citations;
 - every `keep` cites a Book-like title plus synopsis, attribution, or identifier corroboration;
-- every `merge` cites a shared identifier or title correspondence plus synopsis or attribution;
+- every `merge` cites a shared identifier, matching synopsis and attribution, or title
+  correspondence plus synopsis or attribution;
 - every `review` records typed uncertainties linked to source and related-candidate citations;
 - free-form notes occur only for an explicit `other` reason or uncertainty;
 - legacy repeated or evidence-substituted explanation templates: 0;
@@ -251,10 +252,11 @@ packet and exact citation excerpts for audit.
 
 Validated decisions completed before another worker in the same part exhausts retries are appended
 before the run fails, so a resume does not recompute successful semantic work.
-For citation-only model transcription failures, the coordinator may restore a full stored title
-only when its normalized value is the unique equal-length one-character near match for the cited
-Unit and title field; the restored citation must still pass the ordinary validator. Stored synopsis
-text may support `title_variant_same_work` only when it explicitly states the alternate title.
+For citation-only model transcription failures, the coordinator may restore the source's unique
+equal-length stored title selected by a keep proposal's `booklike_title` claim and propagate that
+exact substitution within the same proposal; other title citations require a unique one-character
+near match. Every restored citation must still pass the ordinary validator. Stored synopsis text
+may support `title_variant_same_work` only when it explicitly states the alternate title.
 
 The Luna coordinator defaults to at most 128 total in-flight requests, four packets per full
 decision request, 20 packets per guarded classification request, and eight active packet parts. The

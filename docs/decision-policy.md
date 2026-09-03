@@ -88,8 +88,8 @@ role and field type required by that code, and every citation must be used. In p
 
 - `keep` requires `booklike_title` plus at least one of `synopsis_describes_work`,
   `author_attribution_present`, or `identifier_present`;
-- `merge` requires `same_identifier`, or title correspondence plus `same_synopsis` or
-  `same_attribution`;
+- `merge` requires `same_identifier`, matching `same_synopsis` and `same_attribution`, or title
+  correspondence plus `same_synopsis` or `same_attribution`;
 - `soft_delete` requires the basis corresponding to its reason code;
 - `revise` requires metadata- or attribution-correction evidence matching its reason and patches;
 - `review` uses typed `uncertainties` linked to source and related-candidate citations instead of

@@ -166,6 +166,65 @@ test("structured basis must be linked to stored evidence with disposition-specif
 	).toThrow("Routine decisions must use typed basis");
 });
 
+test("question-shaped Book title cannot drive deletion against stored Book corroboration", () => {
+	const runConfig = config(`question-title-${Date.now()}`);
+	const id = randomUUID();
+	const base = book(id, "成为圣人是一种什么体验?");
+	const { evidenceHash: _evidenceHash, ...unhashed } = base;
+	const sourceLocalization = unhashed.localizations[0];
+	if (!sourceLocalization) throw new Error("Fixture localization is missing");
+	const questionBook = {
+		...unhashed,
+		attributions: [
+			{
+				id: randomUUID(),
+				role: "author",
+				creditedUnitId: randomUUID(),
+				creditedUnitKind: "entity",
+				entityKind: "person",
+				entityVerified: false,
+				localizations: [{ language: "zh", title: "作者甲", summary: null }],
+			},
+		],
+		localizations: [
+			{
+				...sourceLocalization,
+				description:
+					"封神之后已过千年，主角与异世界人物交换身份，由此展开一段具有完整人物和事件脉络的长篇故事。",
+			},
+		],
+	};
+	const source = BookEvidenceSchema.parse({
+		...questionBook,
+		evidenceHash: sha256(questionBook),
+	});
+	const packet = buildReviewPacket(runConfig, 0, "成为圣人", [source], []);
+	const decision = SourceDecisionSchema.parse({
+		schemaVersion: SchemaVersion,
+		runId: packet.runId,
+		part: packet.part,
+		packetId: packet.packetId,
+		inputHash: packet.inputHash,
+		sourceUnitId: source.id,
+		decidedAt: nowIso(),
+		actor: { kind: "codex", model: "fixture", promptRevision: "evidence-claims-v3" },
+		confidence: "high",
+		citations: [
+			{
+				unitId: source.id,
+				field: "localization_title",
+				excerpt: "成为圣人是一种什么体验?",
+			},
+		],
+		disposition: "soft_delete",
+		reason: "query_fragment",
+		basis: [{ code: "question_like_title", citationIndexes: [0] }],
+	});
+	expect(() => validateDecisionAgainstPacket(runConfig, packet, decision)).toThrow(
+		"Query-fragment deletion conflicts",
+	);
+});
+
 test("review uncertainty must cite both the source and its related candidate", () => {
 	const runConfig = config(`quality-review-${Date.now()}`);
 	const source = book(randomUUID(), "同名作品");

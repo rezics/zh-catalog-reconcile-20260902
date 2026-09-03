@@ -95,7 +95,7 @@ function compareSourcePosition(
 	return time !== 0 ? time : left.id.localeCompare(right.id);
 }
 
-export async function readPacketCheckpoint(config: RunConfig) {
+async function reconstructPacketCheckpoint(config: RunConfig) {
 	const packetDirectory = join(runDirectory(config.runId), "packets");
 	const checkpointPath = join(packetDirectory, "checkpoint.json");
 	const partPaths = await listPartFiles(packetDirectory);
@@ -152,6 +152,27 @@ export async function readPacketCheckpoint(config: RunConfig) {
 	});
 }
 
+export async function readPacketCheckpoint(
+	config: RunConfig,
+	options: { readonly verifyAll?: boolean } = {},
+) {
+	const packetDirectory = join(runDirectory(config.runId), "packets");
+	const checkpointPath = join(packetDirectory, "checkpoint.json");
+	if (options.verifyAll || !(await pathExists(checkpointPath)))
+		return reconstructPacketCheckpoint(config);
+
+	const checkpoint = await readJson(checkpointPath, PacketCheckpointSchema);
+	if (checkpoint.runId !== config.runId) throw new Error("Packet checkpoint run ID mismatch");
+	const unexpectedNextPart = join(packetDirectory, partFileName(checkpoint.nextPart));
+	if (await pathExists(unexpectedNextPart)) return reconstructPacketCheckpoint(config);
+	if (
+		checkpoint.nextPart > 0 &&
+		!(await pathExists(join(packetDirectory, partFileName(checkpoint.nextPart - 1))))
+	)
+		throw new Error("Packet checkpoint references a missing final packet part");
+	return checkpoint;
+}
+
 export async function captureNextOnlinePacketBatch(config: RunConfig) {
 	const packetDirectory = join(runDirectory(config.runId), "packets");
 	const lockPath = join(packetDirectory, "capture.lock");
@@ -161,8 +182,9 @@ export async function captureNextOnlinePacketBatch(config: RunConfig) {
 
 		const groups = await withOnlineCatalog(config, (reader) =>
 			reader.readEvidencePage({
-				afterCreatedAt: checkpoint.lastSourceCreatedAt,
-				afterUnitId: checkpoint.lastSourceUnitId,
+				afterCreatedAt:
+					checkpoint.lastSourceCreatedAt ?? config.sourceStart?.afterCreatedAt ?? null,
+				afterUnitId: checkpoint.lastSourceUnitId ?? config.sourceStart?.afterUnitId ?? null,
 				limit: config.onlineBatchSize,
 				maxCandidates: config.maxCandidatesPerPacket,
 			}),

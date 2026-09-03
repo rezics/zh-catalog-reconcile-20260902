@@ -26,6 +26,12 @@ AI requests `next`
 
 ## Online instead of a local catalog copy
 
+The full-run `work` command preserves a single capture/write path and fans out only model
+inference. One coordinator reads a persisted packet part, splits it into bounded work items,
+runs ephemeral Luna processes concurrently, validates all returned proposals, and records the
+part through one writer. Workers cannot choose run IDs, packet hashes, timestamps, or actor
+identity and never receive database credentials.
+
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while
 each packet captures the current source/candidate state and `updatedAt` values. Later mutation
@@ -58,6 +64,13 @@ the page again.
 
 A run-wide capture lock prevents two `next` calls from fetching the same cursor concurrently.
 Decision files remain append-only and retain their existing per-part lock.
+
+A separate orchestration lock prevents two full-run coordinators from sharing one run. Completed
+decision parts advance an atomic decision checkpoint, so normal pending lookup reads only the
+current part rather than rescanning growing history. Packet capture trusts its atomic checkpoint
+on the hot path and performs a full reconstruction at startup, after a detected part/checkpoint
+crash gap, and at explicit verification boundaries. A hard-killed process can leave a lock; verify
+its recorded PID is no longer alive before removing that exact lock. Never remove a live lock.
 
 ## Production read transport
 

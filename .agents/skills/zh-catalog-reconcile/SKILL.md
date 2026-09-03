@@ -122,8 +122,21 @@ allowance. Preserve the run for later resume.
 
 ## Complete a full run
 
-Continue `next` and `record` until status reports `onlineComplete: true`, zero remaining packets,
-and full decision coverage. Require `audit` to report `passed`, then run:
+For a fresh full-corpus Luna run, use one coordinator with bounded inference concurrency. Do not
+set or simulate a durable decision target:
+
+```powershell
+bun run reconcile work --run <run-id> --concurrency 8 --packets-per-worker 2
+```
+
+The coordinator alone may call `next` and `record`. Ephemeral workers return typed semantic
+proposals and must not browse, access the database, or use deterministic disposition rules. A
+question-shaped title is not a query merely because it contains punctuation. Resume the same
+command after an operator interruption; do not resume a run whose decisions use another model or
+prompt revision.
+
+Continue until status reports `onlineComplete: true`, zero remaining packets, and full decision
+coverage. Require `audit` to report `passed`, then run:
 
 ```powershell
 bun run reconcile audit --run <run-id>

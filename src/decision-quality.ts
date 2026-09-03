@@ -588,6 +588,23 @@ export function validateDecisionAgainstPacket(
 		);
 	validateDecisionBindingAgainstPacket(config, packet, decision);
 	validateCitationSet(packet, decision.citations);
+	if (decision.disposition === "soft_delete" && decision.reason === "query_fragment") {
+		const source = packet.candidates.find(({ id }) => id === decision.sourceUnitId);
+		const hasSynopsis = source?.localizations.some(
+			({ summary, description }) =>
+				(summary?.trim().length ?? 0) >= 40 ||
+				(description !== null && jsonStrings(description).some((text) => text.trim().length >= 40)),
+		);
+		const hasAuthorship = source?.attributions.some(
+			({ role, localizations }) =>
+				role.toLocaleLowerCase("en-US") === "author" &&
+				localizations.some(({ title }) => Boolean(title?.trim())),
+		);
+		if ((hasSynopsis && hasAuthorship) || source?.details.isbn13)
+			throw new Error(
+				"Query-fragment deletion conflicts with stored synopsis/authorship or identifier evidence; use semantic review, not title-shape deletion",
+			);
+	}
 
 	const usedCitationIndexes = new Set<number>();
 	if (decision.disposition === "review")

@@ -34,6 +34,11 @@ Use when the source does not identify a Book at all: a search query, question, c
 author update, malformed scraper residue, title fragment, or unrecoverable placeholder. Do not
 use this disposition for a real but sparse or uncertain Book.
 
+A question-shaped title is not itself evidence that the source is a query. The runtime gate
+rejects `query_fragment` deletion when stored synopsis and authorship, or an identifier, provide
+contrary Book-shaped evidence. This is a conservative refusal to delete, not automatic proof of
+`keep`; the model must still inspect the packet semantically.
+
 ### `revise`
 
 Use when the source is a real distinct Book and the packet proves a bounded metadata or credit

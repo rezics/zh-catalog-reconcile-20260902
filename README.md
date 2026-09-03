@@ -43,6 +43,11 @@ typed uncertainties linked to citations. A concise `note` is allowed only when a
 unavoidable. Earlier decision contracts remain readable through `status` and `audit`, but cannot
 be resumed or planned.
 
+The `work` command is the full-corpus inference path. One coordinator owns production capture and
+recording while bounded ephemeral Codex workers run `gpt-5.6-luna` concurrently. Workers return
+typed proposals only; the coordinator supplies packet identity and actor fields, validates every
+proposal, and records the part. Total work is not count-limited.
+
 ## Repository roles
 
 - [`PLAN.md`](./PLAN.md) is the authoritative execution and approval plan.
@@ -69,6 +74,19 @@ bun run reconcile init --run rehearsal-001 --rezics-ref v1.7.0 --cutoff 2026-09-
 bun run reconcile status --run rehearsal-001
 bun run reconcile audit --run rehearsal-001
 ```
+
+Use `--after-run <run-id>` on `init` when a fresh policy run must begin after a validated online
+packet cursor from an earlier run. Only the cursor is carried forward; earlier decisions and
+evidence remain in the predecessor run.
+
+Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
+
+```powershell
+bun run reconcile work --run full-online-luna-20260904 --concurrency 8 --packets-per-worker 2
+```
+
+Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no
+`--target` or count limit on `work`; concurrency is bounded independently from total work.
 
 Database commands accept either `REZICS_DATABASE_SECRET_FILE` or a dedicated
 `REZICS_DATABASE_READONLY_URL`, never both. With the secret document, the runner can reach a

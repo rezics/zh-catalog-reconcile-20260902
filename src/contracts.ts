@@ -139,6 +139,15 @@ export const DecisionPolicyRevisionSchema = z.enum([
 export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema>;
 export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
+export const SourceStartSchema = z
+	.object({
+		fromRunId: RunIdSchema,
+		afterCreatedAt: DateTimeSchema,
+		afterUnitId: UuidSchema,
+	})
+	.strict();
+export type SourceStart = z.infer<typeof SourceStartSchema>;
+
 export const RunConfigSchema = z
 	.object({
 		schemaVersion: z.literal(SchemaVersion),
@@ -160,6 +169,7 @@ export const RunConfigSchema = z
 		evidenceMode: z.literal("online-batched"),
 		applyState: z.literal("locked"),
 		decisionPolicyRevision: DecisionPolicyRevisionSchema.default("legacy-v1"),
+		sourceStart: SourceStartSchema.nullable().default(null),
 		onlineBatchSize: z.int().min(1).max(100),
 		maxCandidatesPerPacket: z.int().min(2).max(50),
 	})
@@ -195,6 +205,16 @@ export const PacketCheckpointSchema = z
 			});
 	});
 export type PacketCheckpoint = z.infer<typeof PacketCheckpointSchema>;
+
+export const DecisionProgressCheckpointSchema = z
+	.object({
+		schemaVersion: z.literal(SchemaVersion),
+		runId: RunIdSchema,
+		completedThroughPart: z.int().min(-1),
+		updatedAt: DateTimeSchema,
+	})
+	.strict();
+export type DecisionProgressCheckpoint = z.infer<typeof DecisionProgressCheckpointSchema>;
 
 export const InventorySchema = z
 	.object({
@@ -542,6 +562,114 @@ export const SourceDecisionSchema = z
 	});
 export type SourceDecision = z.infer<typeof SourceDecisionSchema>;
 
+const DecisionProposalBaseFields = {
+	sourceUnitId: UuidSchema,
+	confidence: DecisionConfidenceSchema,
+	citations: z.array(DecisionEvidenceCitationSchema).min(1).max(20),
+	note: z.string().trim().min(8).max(240).nullable(),
+} as const;
+
+const [
+	textPatch,
+	descriptionPatch,
+	releaseStatusPatch,
+	isbnPatch,
+	publicationDatePatch,
+	pageCountPatch,
+	wordCountPatch,
+	creditPatch,
+] = RevisionPatchSchema.options;
+
+const ProposalRevisionPatchSchema = z.union([
+	textPatch,
+	descriptionPatch.extend({ value: z.string() }),
+	releaseStatusPatch,
+	isbnPatch,
+	publicationDatePatch,
+	pageCountPatch,
+	wordCountPatch,
+	creditPatch,
+]);
+
+export const DecisionProposalSchema = z
+	.union([
+		z
+			.object({
+				...DecisionProposalBaseFields,
+				disposition: z.literal("keep"),
+				reason: z.literal("distinct_work"),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionProposalBaseFields,
+				disposition: z.literal("merge"),
+				reason: z.literal("duplicate_identity"),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				targetUnitId: UuidSchema,
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionProposalBaseFields,
+				disposition: z.literal("soft_delete"),
+				reason: z.enum([
+					"query_fragment",
+					"character_as_book",
+					"person_or_entity_as_book",
+					"malformed_scrape",
+					"placeholder",
+					"other",
+				]),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionProposalBaseFields,
+				disposition: z.literal("revise"),
+				reason: z.enum(["wrong_attribution", "wrong_metadata"]),
+				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				patches: z.array(ProposalRevisionPatchSchema).min(1).max(20),
+			})
+			.strict(),
+		z
+			.object({
+				...DecisionProposalBaseFields,
+				disposition: z.literal("review"),
+				reason: z.enum(["insufficient_evidence", "other"]),
+				uncertainties: z.array(DecisionUncertaintySchema).min(1).max(10),
+			})
+			.strict(),
+	])
+	.superRefine((proposal, context) => {
+		const noteRequired =
+			proposal.reason === "other" ||
+			(proposal.disposition === "review" &&
+				proposal.uncertainties.some(({ kind }) => kind === "other"));
+		if (noteRequired && proposal.note === null)
+			context.addIssue({
+				code: "custom",
+				message: "A concise note is required when a typed code cannot express the decision",
+				path: ["note"],
+			});
+		if (!noteRequired && proposal.note !== null)
+			context.addIssue({
+				code: "custom",
+				message: "Routine proposals must use typed basis or uncertainty codes instead of a note",
+				path: ["note"],
+			});
+	});
+export type DecisionProposal = z.infer<typeof DecisionProposalSchema>;
+
+export const DecisionProposalBatchSchema = z
+	.object({
+		decisions: z.array(DecisionProposalSchema).min(1).max(20),
+	})
+	.strict();
+export type DecisionProposalBatch = z.infer<typeof DecisionProposalBatchSchema>;
+
 export const EvidenceGroundedSourceDecisionSchema = z.discriminatedUnion("disposition", [
 	z
 		.object({
@@ -748,7 +876,9 @@ export const GeneratedSchemas = {
 	"run-config": RunConfigSchema,
 	"book-evidence": BookEvidenceSchema,
 	"packet-checkpoint": PacketCheckpointSchema,
+	"decision-progress-checkpoint": DecisionProgressCheckpointSchema,
 	"review-packet": ReviewPacketSchema,
+	"decision-proposal-batch": DecisionProposalBatchSchema,
 	"source-decision": SourceDecisionSchema,
 	"decision-quality-report": DecisionQualityReportSchema,
 	"manifest-action": ManifestActionSchema,

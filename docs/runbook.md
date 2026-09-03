@@ -42,6 +42,11 @@ bun run reconcile init `
   --cutoff 2026-09-02T16:00:00.000Z
 ```
 
+To start a new policy run immediately after a previously captured online run, add
+`--after-run <run-id>`. The runner validates that predecessor's packet cursor, cutoff, and
+REZICS reference, and records the cursor as new-run metadata; it does not copy or resume the
+predecessor's decisions.
+
 Initialization is offline and writes `evidenceMode: "online-batched"` with `applyState: "locked"`.
 It also writes `decisionPolicyRevision: "evidence-claims-v3"`. Do not resume a run reported as
 `legacy-v1` or `evidence-grounded-v2`, a run that lacks the online evidence mode, or a run
@@ -84,6 +89,22 @@ Each decision must follow the repository decision template. Routine actions use 
 uncertainties with the same linkage. Do not write an explanation; a concise `note` is accepted
 only for an explicit `other` code. `record` rejects unsupported claim/field combinations,
 unreferenced citations, insufficient keep/merge proof, and complete blanket-review parts.
+
+For a complete run, prefer the single-coordinator concurrent inference command:
+
+```powershell
+bun run reconcile work `
+  --run full-online-luna-20260904 `
+  --concurrency 8 `
+  --packets-per-worker 2 `
+  --progress-every 1000
+```
+
+`work` has no decision-count target. It continues until the online cursor is complete or the
+operator interrupts it. Only ephemeral `gpt-5.6-luna` inference is concurrent; capture and record
+remain single-owner. On interruption, wait for the command to release its orchestration lock,
+then run the same command to resume. Never use a run containing decisions from a different model
+or prompt revision, and never use `--after-run` to skip an untrusted decision range.
 
 ## 6. Validate and plan actions
 

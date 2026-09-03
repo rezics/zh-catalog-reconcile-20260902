@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
 	CurrentDecisionPolicyRevision,
+	DecisionProgressCheckpointSchema,
 	type PersistedSourceDecision,
 	PersistedSourceDecisionSchema,
 	type ReviewPacket,
@@ -21,11 +22,15 @@ import {
 	appendRunEvent,
 	assertPathInsideRepository,
 	listPartFiles,
+	nowIso,
 	partFileName,
 	pathExists,
+	readJson,
 	readJsonLines,
 	runDirectory,
 	withFileLock,
+	writeJsonAtomic,
+	writeJsonLinesAtomic,
 } from "./io.ts";
 import { captureNextOnlinePacketBatch, readPacketCheckpoint } from "./packets.ts";
 
@@ -81,11 +86,18 @@ export async function recordDecisions(
 	config: RunConfig,
 	decisionPath: string,
 ): Promise<{ readonly recorded: number }> {
+	return recordDecisionValues(config, await parseDecisionFile(decisionPath));
+}
+
+export async function recordDecisionValues(
+	config: RunConfig,
+	decisionsInput: readonly SourceDecision[],
+): Promise<{ readonly recorded: number }> {
 	if (config.decisionPolicyRevision !== CurrentDecisionPolicyRevision)
 		throw new Error(
 			`Run decision policy ${config.decisionPolicyRevision} is read-only; initialize a new run`,
 		);
-	const decisions = await parseDecisionFile(decisionPath);
+	const decisions = decisionsInput.map((decision) => SourceDecisionSchema.parse(decision));
 	if (decisions.length === 0) throw new Error("Decision file is empty");
 	const incomingSourceIds = new Set<string>();
 	for (const decision of decisions) {
@@ -119,7 +131,8 @@ export async function recordDecisions(
 				0,
 			);
 			assertDecisionPartQuality(part, [...current, ...partDecisions], expectedSourceCount);
-			await appendJsonLines(outputPath, partDecisions);
+			if (persisted.length === 0) await writeJsonLinesAtomic(outputPath, partDecisions);
+			else await appendJsonLines(outputPath, partDecisions);
 		});
 	}
 	await appendRunEvent(config.runId, "decisions.recorded", {
@@ -131,6 +144,26 @@ export async function recordDecisions(
 
 async function decisionsForPart(config: RunConfig, part: number): Promise<Set<string>> {
 	return loadExistingSourceIds(join(runDirectory(config.runId), "decisions", partFileName(part)));
+}
+
+async function decisionProgressStart(config: RunConfig): Promise<number> {
+	const checkpointPath = join(runDirectory(config.runId), "decisions", "checkpoint.json");
+	if (!(await pathExists(checkpointPath))) return 0;
+	const checkpoint = await readJson(checkpointPath, DecisionProgressCheckpointSchema);
+	if (checkpoint.runId !== config.runId) throw new Error("Decision checkpoint run ID mismatch");
+	return checkpoint.completedThroughPart + 1;
+}
+
+async function markDecisionPartComplete(config: RunConfig, part: number): Promise<void> {
+	await writeJsonAtomic(
+		join(runDirectory(config.runId), "decisions", "checkpoint.json"),
+		DecisionProgressCheckpointSchema.parse({
+			schemaVersion: 1,
+			runId: config.runId,
+			completedThroughPart: part,
+			updatedAt: nowIso(),
+		}),
+	);
 }
 
 export async function nextPackets(
@@ -161,10 +194,16 @@ async function findPendingPackets(
 		readonly packet: ReviewPacket;
 		readonly undecidedSourceUnitIds: readonly string[];
 	}[] = [];
-	for (const packetPath of await listPartFiles(join(runDirectory(config.runId), "packets"))) {
-		const match = /part-(\d{5,12})\.jsonl$/u.exec(packetPath);
-		if (!match?.[1]) throw new Error(`Unexpected packet part path: ${packetPath}`);
-		const decided = await decisionsForPart(config, Number(match[1]));
+	const packetCheckpoint = await readPacketCheckpoint(config);
+	const packetDirectory = join(runDirectory(config.runId), "packets");
+	const startPart = await decisionProgressStart(config);
+	if (startPart > packetCheckpoint.nextPart)
+		throw new Error("Decision checkpoint is ahead of the packet checkpoint");
+	for (let part = startPart; part < packetCheckpoint.nextPart; part += 1) {
+		const packetPath = join(packetDirectory, partFileName(part));
+		if (!(await pathExists(packetPath)))
+			throw new Error(`Decision checkpoint reached a missing packet part: ${part}`);
+		const decided = await decisionsForPart(config, part);
 		for await (const packet of readJsonLines(packetPath, ReviewPacketSchema)) {
 			const undecidedSourceUnitIds = packet.sourceUnitIds.filter(
 				(sourceUnitId) => !decided.has(sourceUnitId),
@@ -172,6 +211,8 @@ async function findPendingPackets(
 			if (undecidedSourceUnitIds.length > 0) result.push({ packet, undecidedSourceUnitIds });
 			if (result.length >= limit) return result;
 		}
+		if (result.length > 0) return result;
+		await markDecisionPartComplete(config, part);
 	}
 	return result;
 }

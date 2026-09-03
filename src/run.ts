@@ -6,18 +6,52 @@ import {
 	type RunConfig,
 	RunConfigSchema,
 	SchemaVersion,
+	SourceStartSchema,
 } from "./contracts.ts";
-import { appendRunEvent, nowIso, pathExists, runDirectory, writeJsonAtomic } from "./io.ts";
+import {
+	appendRunEvent,
+	loadRunConfig,
+	nowIso,
+	pathExists,
+	runDirectory,
+	writeJsonAtomic,
+} from "./io.ts";
+import { readPacketCheckpoint } from "./packets.ts";
 
 export type InitializeRunInput = {
 	readonly runId: string;
 	readonly rezicsRef: string;
 	readonly cutoff: string;
+	readonly afterRunId?: string;
 };
 
 export async function initializeRun(input: InitializeRunInput): Promise<RunConfig> {
 	const directory = runDirectory(input.runId);
 	if (await pathExists(directory)) throw new Error(`Run already exists: ${input.runId}`);
+	let sourceStart = null;
+	if (input.afterRunId !== undefined) {
+		if (input.afterRunId === input.runId)
+			throw new Error("A run cannot use itself as the source-start predecessor");
+		const predecessor = await loadRunConfig(input.afterRunId);
+		if (predecessor.evidenceMode !== "online-batched")
+			throw new Error("The source-start predecessor is not an online-batched run");
+		if (predecessor.cutoff !== input.cutoff)
+			throw new Error("The source-start predecessor uses a different creation cutoff");
+		if (predecessor.rezicsRef !== input.rezicsRef)
+			throw new Error("The source-start predecessor uses a different REZICS release reference");
+		const checkpoint = await readPacketCheckpoint(predecessor, { verifyAll: true });
+		if (
+			checkpoint.sourceCount === 0 ||
+			checkpoint.lastSourceCreatedAt === null ||
+			checkpoint.lastSourceUnitId === null
+		)
+			throw new Error("The source-start predecessor has no captured source cursor");
+		sourceStart = SourceStartSchema.parse({
+			fromRunId: predecessor.runId,
+			afterCreatedAt: checkpoint.lastSourceCreatedAt,
+			afterUnitId: checkpoint.lastSourceUnitId,
+		});
+	}
 	const config = RunConfigSchema.parse({
 		schemaVersion: SchemaVersion,
 		runId: input.runId,
@@ -36,6 +70,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		evidenceMode: "online-batched",
 		applyState: "locked",
 		decisionPolicyRevision: CurrentDecisionPolicyRevision,
+		sourceStart,
 		onlineBatchSize: 20,
 		maxCandidatesPerPacket: 20,
 	});
@@ -49,6 +84,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		rezicsRef: config.rezicsRef,
 		evidenceMode: config.evidenceMode,
 		decisionPolicyRevision: config.decisionPolicyRevision,
+		sourceStart: config.sourceStart,
 		onlineBatchSize: config.onlineBatchSize,
 		applyState: config.applyState,
 	});

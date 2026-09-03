@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
+	DecisionProgressCheckpointSchema,
 	ManifestActionSchema,
 	PacketCheckpointSchema,
 	SchemaVersion,
@@ -14,6 +15,7 @@ import { sha256 } from "../src/hash.ts";
 import {
 	nowIso,
 	partFileName,
+	readJson,
 	readJsonLines,
 	runDirectory,
 	writeJsonAtomic,
@@ -128,6 +130,13 @@ test("fixture run reaches a validated manifest without an apply surface", async 
 			},
 		]);
 		expect((await recordDecisions(config, decisionPath)).recorded).toBe(1);
+		expect(await nextPackets(config, 1)).toEqual([]);
+		expect(
+			await readJson(
+				join(directory, "decisions", "checkpoint.json"),
+				DecisionProgressCheckpointSchema,
+			),
+		).toMatchObject({ completedThroughPart: 0 });
 		const summary = await generateManifest(config);
 		expect(summary.actionCount).toBe(1);
 
@@ -141,5 +150,38 @@ test("fixture run reaches a validated manifest without an apply surface", async 
 		expect(actions[0]).toMatchObject({ kind: "soft_delete", sourceUnitId: SourceId });
 	} finally {
 		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("new online run can start after a predecessor packet cursor", async () => {
+	const suffix = Date.now();
+	const predecessorRunId = `cursor-predecessor-${suffix}`;
+	const successorRunId = `cursor-successor-${suffix}`;
+	const predecessorDirectory = runDirectory(predecessorRunId);
+	const successorDirectory = runDirectory(successorRunId);
+	try {
+		const predecessor = await initializeRun({
+			runId: predecessorRunId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook();
+		const packet = buildReviewPacket(predecessor, 0, "天蚕土豆", [source], []);
+		await writeJsonLinesAtomic(join(predecessorDirectory, "packets", partFileName(0)), [packet]);
+
+		const successor = await initializeRun({
+			runId: successorRunId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+			afterRunId: predecessorRunId,
+		});
+		expect(successor.sourceStart).toEqual({
+			fromRunId: predecessorRunId,
+			afterCreatedAt: source.createdAt,
+			afterUnitId: SourceId,
+		});
+	} finally {
+		await rm(predecessorDirectory, { recursive: true, force: true });
+		await rm(successorDirectory, { recursive: true, force: true });
 	}
 });

@@ -1,0 +1,1056 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "decisions": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "sourceUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "citations": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "unitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "localization_title",
+                        "localization_summary",
+                        "localization_description",
+                        "alias",
+                        "attribution",
+                        "book_release_status",
+                        "book_isbn13",
+                        "book_publication_date",
+                        "book_page_count",
+                        "book_word_count",
+                        "unit_created_at",
+                        "unit_updated_at",
+                        "localization_languages",
+                        "suspicious_signal"
+                      ]
+                    },
+                    "excerpt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "unitId",
+                    "field",
+                    "excerpt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 240
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "type": "string",
+                "const": "keep"
+              },
+              "reason": {
+                "type": "string",
+                "const": "distinct_work"
+              },
+              "basis": {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "booklike_title",
+                        "synopsis_describes_work",
+                        "author_attribution_present",
+                        "identifier_present",
+                        "distinct_candidate_evidence",
+                        "same_title",
+                        "title_variant_same_work",
+                        "same_synopsis",
+                        "same_attribution",
+                        "same_identifier",
+                        "query_like_title",
+                        "question_like_title",
+                        "character_identity",
+                        "person_or_entity_identity",
+                        "malformed_metadata",
+                        "placeholder_metadata",
+                        "non_book_identity",
+                        "metadata_correction_supported",
+                        "attribution_correction_supported"
+                      ]
+                    },
+                    "citationIndexes": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 19
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "citationIndexes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "sourceUnitId",
+              "confidence",
+              "citations",
+              "note",
+              "disposition",
+              "reason",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sourceUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "citations": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "unitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "localization_title",
+                        "localization_summary",
+                        "localization_description",
+                        "alias",
+                        "attribution",
+                        "book_release_status",
+                        "book_isbn13",
+                        "book_publication_date",
+                        "book_page_count",
+                        "book_word_count",
+                        "unit_created_at",
+                        "unit_updated_at",
+                        "localization_languages",
+                        "suspicious_signal"
+                      ]
+                    },
+                    "excerpt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "unitId",
+                    "field",
+                    "excerpt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 240
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "type": "string",
+                "const": "merge"
+              },
+              "reason": {
+                "type": "string",
+                "const": "duplicate_identity"
+              },
+              "basis": {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "booklike_title",
+                        "synopsis_describes_work",
+                        "author_attribution_present",
+                        "identifier_present",
+                        "distinct_candidate_evidence",
+                        "same_title",
+                        "title_variant_same_work",
+                        "same_synopsis",
+                        "same_attribution",
+                        "same_identifier",
+                        "query_like_title",
+                        "question_like_title",
+                        "character_identity",
+                        "person_or_entity_identity",
+                        "malformed_metadata",
+                        "placeholder_metadata",
+                        "non_book_identity",
+                        "metadata_correction_supported",
+                        "attribution_correction_supported"
+                      ]
+                    },
+                    "citationIndexes": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 19
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "citationIndexes"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "targetUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "sourceUnitId",
+              "confidence",
+              "citations",
+              "note",
+              "disposition",
+              "reason",
+              "basis",
+              "targetUnitId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sourceUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "citations": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "unitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "localization_title",
+                        "localization_summary",
+                        "localization_description",
+                        "alias",
+                        "attribution",
+                        "book_release_status",
+                        "book_isbn13",
+                        "book_publication_date",
+                        "book_page_count",
+                        "book_word_count",
+                        "unit_created_at",
+                        "unit_updated_at",
+                        "localization_languages",
+                        "suspicious_signal"
+                      ]
+                    },
+                    "excerpt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "unitId",
+                    "field",
+                    "excerpt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 240
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "type": "string",
+                "const": "soft_delete"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "query_fragment",
+                  "character_as_book",
+                  "person_or_entity_as_book",
+                  "malformed_scrape",
+                  "placeholder",
+                  "other"
+                ]
+              },
+              "basis": {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "booklike_title",
+                        "synopsis_describes_work",
+                        "author_attribution_present",
+                        "identifier_present",
+                        "distinct_candidate_evidence",
+                        "same_title",
+                        "title_variant_same_work",
+                        "same_synopsis",
+                        "same_attribution",
+                        "same_identifier",
+                        "query_like_title",
+                        "question_like_title",
+                        "character_identity",
+                        "person_or_entity_identity",
+                        "malformed_metadata",
+                        "placeholder_metadata",
+                        "non_book_identity",
+                        "metadata_correction_supported",
+                        "attribution_correction_supported"
+                      ]
+                    },
+                    "citationIndexes": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 19
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "citationIndexes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "sourceUnitId",
+              "confidence",
+              "citations",
+              "note",
+              "disposition",
+              "reason",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sourceUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "citations": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "unitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "localization_title",
+                        "localization_summary",
+                        "localization_description",
+                        "alias",
+                        "attribution",
+                        "book_release_status",
+                        "book_isbn13",
+                        "book_publication_date",
+                        "book_page_count",
+                        "book_word_count",
+                        "unit_created_at",
+                        "unit_updated_at",
+                        "localization_languages",
+                        "suspicious_signal"
+                      ]
+                    },
+                    "excerpt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "unitId",
+                    "field",
+                    "excerpt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 240
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "type": "string",
+                "const": "revise"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "wrong_attribution",
+                  "wrong_metadata"
+                ]
+              },
+              "basis": {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "booklike_title",
+                        "synopsis_describes_work",
+                        "author_attribution_present",
+                        "identifier_present",
+                        "distinct_candidate_evidence",
+                        "same_title",
+                        "title_variant_same_work",
+                        "same_synopsis",
+                        "same_attribution",
+                        "same_identifier",
+                        "query_like_title",
+                        "question_like_title",
+                        "character_identity",
+                        "person_or_entity_identity",
+                        "malformed_metadata",
+                        "placeholder_metadata",
+                        "non_book_identity",
+                        "metadata_correction_supported",
+                        "attribution_correction_supported"
+                      ]
+                    },
+                    "citationIndexes": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 19
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "citationIndexes"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "patches": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "localization_text_field"
+                        },
+                        "language": {
+                          "type": "string",
+                          "const": "zh"
+                        },
+                        "field": {
+                          "type": "string",
+                          "enum": [
+                            "title",
+                            "summary"
+                          ]
+                        },
+                        "value": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "language",
+                        "field",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "localization_description"
+                        },
+                        "language": {
+                          "type": "string",
+                          "const": "zh"
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "language",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "book_release_status"
+                        },
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "book_isbn13"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[0-9]{13}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "book_publication_date"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "book_page_count"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "book_word_count"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "value",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "credit_replacement"
+                        },
+                        "role": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "removeAttributionId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "creditedUnitId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "evidenceUnitIds": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "role",
+                        "removeAttributionId",
+                        "creditedUnitId",
+                        "evidenceUnitIds"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "sourceUnitId",
+              "confidence",
+              "citations",
+              "note",
+              "disposition",
+              "reason",
+              "basis",
+              "patches"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sourceUnitId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "citations": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "unitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "localization_title",
+                        "localization_summary",
+                        "localization_description",
+                        "alias",
+                        "attribution",
+                        "book_release_status",
+                        "book_isbn13",
+                        "book_publication_date",
+                        "book_page_count",
+                        "book_word_count",
+                        "unit_created_at",
+                        "unit_updated_at",
+                        "localization_languages",
+                        "suspicious_signal"
+                      ]
+                    },
+                    "excerpt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "unitId",
+                    "field",
+                    "excerpt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 240
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "type": "string",
+                "const": "review"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "insufficient_evidence",
+                  "other"
+                ]
+              },
+              "uncertainties": {
+                "minItems": 1,
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "candidate_identity_ambiguous",
+                        "conflicting_stored_evidence",
+                        "correction_not_proven",
+                        "non_book_status_unclear",
+                        "required_target_absent",
+                        "other"
+                      ]
+                    },
+                    "citationIndexes": {
+                      "minItems": 1,
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 19
+                      }
+                    },
+                    "relatedUnitIds": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "citationIndexes",
+                    "relatedUnitIds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "sourceUnitId",
+              "confidence",
+              "citations",
+              "note",
+              "disposition",
+              "reason",
+              "uncertainties"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "decisions"
+  ],
+  "additionalProperties": false
+}

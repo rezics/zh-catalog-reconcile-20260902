@@ -80,6 +80,10 @@ Repeat `next` and `record` until the online source cursor is complete:
 6. Let the AI decide only after the database transaction has closed. Append validated decisions
    through `record`.
 
+For full-corpus execution, `work` owns orchestration: one coordinator performs steps 1–6 while
+bounded ephemeral Luna workers evaluate disjoint packet subsets concurrently. Total work is not
+count-limited. Worker concurrency never multiplies database transactions or writers.
+
 Each packet currently contains one source and at most `maxCandidatesPerPacket` total Books. The
 source is always included. Candidate ranking may prefer multilingual/`ja` records, identifiers,
 richer metadata, and older stable records, but ranking never makes a decision.
@@ -200,6 +204,15 @@ fixed-size summaries alongside the packet-storage sharding described above.
 The model no longer repeats natural-language explanations, source Unit IDs, and cited titles in
 the same field. Basis codes and citation indexes keep routine output bounded while preserving the
 full immutable packet and exact citation excerpts for audit.
+
+The Luna coordinator defaults to eight in-flight requests, two packets per request, and one
+captured part of 20 sources at a time. It performs one startup verification and one final audit;
+periodic progress is incremental rather than a repeated whole-run scan. At 500,000,000 sources,
+two sources per request imply 250,000,000 inference requests; at 3,000,000,000 they imply
+1,500,000,000. These are partitioned service workloads, not acceptable single-workstation runs.
+The packet-keyspace and object-storage cutover above remains required at that scale. The current
+local command bounds active processes and pending packet count, while process startup overhead,
+model rate limits, packet byte sizes, and candidate-search latency remain observable bottlenecks.
 
 ## Completion criteria
 

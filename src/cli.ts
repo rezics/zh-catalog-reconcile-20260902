@@ -2,6 +2,7 @@ import { captureInventory, databaseDoctor } from "./database.ts";
 import { auditDecisionQuality } from "./decision-quality.ts";
 import { nextPackets, recordDecisions, runStatus } from "./decisions.ts";
 import { loadRunConfig } from "./io.ts";
+import { runConcurrentReconciliation } from "./orchestrator.ts";
 import { generateManifest } from "./planner.ts";
 import { initializeRun } from "./run.ts";
 
@@ -10,10 +11,11 @@ Usage: bun run reconcile <command> [options]
 
 Commands:
   doctor
-  init       --run ID --rezics-ref REF --cutoff ISO
+  init       --run ID --rezics-ref REF --cutoff ISO [--after-run ID]
   inventory  --run ID
   next       --run ID [--limit N]  (fetches the next online batch when needed)
   record     --run ID --file PATH
+  work       --run ID [--concurrency N] [--packets-per-worker N] [--progress-every N]
   status     --run ID
   audit      --run ID
   plan       --run ID
@@ -73,10 +75,12 @@ async function main(): Promise<void> {
 
 	switch (command) {
 		case "init": {
+			const afterRunId = values.get("--after-run");
 			const result = await initializeRun({
 				runId,
 				rezicsRef: required(values, "--rezics-ref"),
 				cutoff: required(values, "--cutoff"),
+				...(afterRunId === undefined ? {} : { afterRunId }),
 			});
 			print(result);
 			return;
@@ -93,6 +97,36 @@ async function main(): Promise<void> {
 		}
 		case "record": {
 			print(await recordDecisions(await loadRunConfig(runId), required(values, "--file")));
+			return;
+		}
+		case "work": {
+			const allowed = new Set([
+				"--run",
+				"--concurrency",
+				"--packets-per-worker",
+				"--progress-every",
+			]);
+			for (const key of values.keys())
+				if (!allowed.has(key))
+					throw new Error(`work does not accept ${key}; total work is not count-limited`);
+			const controller = new AbortController();
+			const interrupt = () => controller.abort(new Error("Interrupted by user"));
+			process.once("SIGINT", interrupt);
+			process.once("SIGTERM", interrupt);
+			try {
+				print(
+					await runConcurrentReconciliation(await loadRunConfig(runId), {
+						concurrency: integerOption(values, "--concurrency", 8) ?? 8,
+						packetsPerWorker: integerOption(values, "--packets-per-worker", 2) ?? 2,
+						progressEvery: integerOption(values, "--progress-every", 1_000) ?? 1_000,
+						signal: controller.signal,
+						onProgress: (progress) => print({ progress }),
+					}),
+				);
+			} finally {
+				process.off("SIGINT", interrupt);
+				process.off("SIGTERM", interrupt);
+			}
 			return;
 		}
 		case "status": {

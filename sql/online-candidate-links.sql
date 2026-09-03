@@ -23,13 +23,24 @@ cross join lateral public.search_text_candidates(
 	search_matched,
 	position
 )
-join unit candidate on candidate.id = search_candidate.unit_id
-join book candidate_book on candidate_book.id = candidate.id
+-- Keep both proofs parameterized; flattenable joins can scan whole Unit/Book indexes.
+join lateral (
+	select candidate.id
+	from unit candidate
+	where candidate.id = search_candidate.unit_id
+		and candidate.kind = 'book'
+		and candidate.status = 'published'
+		and candidate.visibility = 'public'
+		and candidate.moderation_status = 'approved'
+		and candidate.deleted_at is null
+		and candidate.created_at <= $3::timestamptz
+	limit 1
+) candidate on true
+join lateral (
+	select candidate_book.id
+	from book candidate_book
+	where candidate_book.id = candidate.id
+	limit 1
+) candidate_book on true
 where search_candidate.search_matched
-	and candidate.kind = 'book'
-	and candidate.status = 'published'
-	and candidate.visibility = 'public'
-	and candidate.moderation_status = 'approved'
-	and candidate.deleted_at is null
-	and candidate.created_at <= $3::timestamptz
 order by source_input.source_unit_id, search_candidate.position;

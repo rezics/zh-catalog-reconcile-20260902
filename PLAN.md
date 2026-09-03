@@ -178,8 +178,9 @@ Current workload assumptions:
 - packet writes are immutable and apply backpressure naturally because only one undecided batch is
   fetched at a time.
 
-At 500,000,000 sources, a batch size of 20 implies 25,000,000 batch transactions; at
-3,000,000,000 it implies 150,000,000. A single workstation and repo-local packet directory are not
+At 500,000,000 sources, a batch size of 64 implies 7,812,500 nonempty batch transactions; at
+3,000,000,000 it implies 46,875,000, plus at most one terminal empty read per partition. A single
+workstation and repo-local packet directory are not
 acceptable at those scales. Partition the `(created_at, id)` keyspace across independent workers,
 store immutable packet parts in durable object storage, aggregate checkpoints externally, and
 rate-limit candidate searches per database shard. Increase database batch size only after
@@ -205,14 +206,65 @@ The model no longer repeats natural-language explanations, source Unit IDs, and 
 the same field. Basis codes and citation indexes keep routine output bounded while preserving the
 full immutable packet and exact citation excerpts for audit.
 
-The Luna coordinator defaults to eight in-flight requests, two packets per request, and one
-captured part of 20 sources at a time. It performs one startup verification and one final audit;
-periodic progress is incremental rather than a repeated whole-run scan. At 500,000,000 sources,
-two sources per request imply 250,000,000 inference requests; at 3,000,000,000 they imply
-1,500,000,000. These are partitioned service workloads, not acceptable single-workstation runs.
+The Luna coordinator defaults to 32 in-flight requests, two packets per request, and one captured
+part of 64 sources at a time. The operator's execution host is a Fedora Threadripper 3970X with
+32 cores / 64 threads and 64 GB RAM; the separate database host has 16 cores and 64 GB RAM. These
+are operator-provided specifications, not measured utilization. Workers use ChatGPT authentication,
+standard (non-Fast) service, medium reasoning, and an isolated tool-free Codex configuration. The
+coordinator performs one startup verification and one final audit; periodic progress is
+incremental rather than a repeated whole-run scan. At 500,000,000 sources, two-source requests
+imply 250,000,000 inference requests before retries; at 3,000,000,000 they imply 1,500,000,000.
+These are partitioned service workloads, not acceptable single-workstation runs.
 The packet-keyspace and object-storage cutover above remains required at that scale. The current
 local command bounds active processes and pending packet count, while process startup overhead,
 model rate limits, packet byte sizes, and candidate-search latency remain observable bottlenecks.
+
+New runs persist the page size selected by `init --online-batch-size` (1–100, default 64). Existing
+runs keep their original size. At the default candidate limit of 20, one page requests at most
+`64 × (20 + 1) = 1,344` evidence Book IDs before deduplication; final packets contain at most 20
+Books including the source. There is one database connection and no growing prefetch queue.
+Neither the worker count nor packet batching multiplies database transactions.
+
+Two-packet requests amortize fixed prompt and process-startup overhead. Ignoring general Codex
+configuration and project instructions avoids duplicating unrelated plugins, MCP tools, and
+repository context. The 32 input limits of 512,000 bytes sum to 16,384,000 bytes, and the 32 output
+limits of 1,000,000 bytes sum to 32,000,000 bytes. These are payload boundaries, not token counts
+or total RAM estimates; coordinator objects, child processes, and model-harness memory are
+additional and must be measured.
+Do not claim a proportional speedup: part barriers, request latency, rate limits, and database
+capture time determine sustained throughput. A full 64-source page supports 32 two-packet requests;
+effective concurrency is at most `min(concurrency, ceil(pageSize / packetsPerWorker))`.
+
+The read-only `probe` command measures a page without storing evidence or changing checkpoints.
+It runs each SELECT normally and again with EXPLAIN ANALYZE; diagnostic elapsed time includes both
+executions and connection setup. Compare normal round trips separately from EXPLAIN execution,
+which may have warmer caches and does not deliver the evidence result. The probe rejects scan
+nodes whose observed base-table/index traversal exceeds the candidate bound, considering
+filtered-out rows and per-loop rounding. This is a regression canary, not a proof of every
+internal operation inside the search function.
+
+Read-only production canary on 2026-09-04, using the existing Windows SSH-stdio path and the
+next uncaptured cursor in `rehearsal-online-10000-after-1000-20260903`:
+
+| Query version / page | Sources / evidence Books | Candidate Book traversal | Candidate Unit traversal | Candidate EXPLAIN execution |
+| --- | --- | --- | --- | --- |
+| Original / 20 | 20 / 78 | 412,834 index rows | — | 69.351 ms |
+| Original / 64 | 64 / 194 | 418,846 index rows | — | 96.428 ms |
+| Book-only lateral / 64 | 64 / 194 | 189 ID lookups | 418,803 index rows | 334.024 ms |
+| Both lateral proofs / 64 | 64 / 194 | 189 ID lookups | 189 ID lookups | 46.029 ms |
+
+The final 64-source plan used 1,684 shared-hit blocks for candidate search, no disk-read blocks,
+and no temporary spill. Source and evidence EXPLAIN execution were 0.531 and 13.468 ms. Normal
+round trips were 1,250.263, 1,236.685, and 11,432.600 ms respectively; this difference includes
+result delivery, serialization, transport behavior, and cache effects, not demonstrated database
+CPU saturation. Total diagnostic elapsed time was 25.211 seconds. One earlier attempt failed in
+the Windows postgres.js socket-write path; a retry completed, and no root cause for that transient
+transport failure is established. No historical run configuration, evidence, or cursor changed.
+
+The SQL change preserves unique-ID membership and eligibility filters, but prevents the observed
+whole-index join strategies. No production indexes or server settings were changed. These samples
+do not establish Fedora throughput, p95 latency, or 32-worker Luna capacity. The 500-million and
+3-billion capacity estimates above remain partitioned-workload planning, not a completed benchmark.
 
 ## Completion criteria
 

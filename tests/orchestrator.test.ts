@@ -1,19 +1,40 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
+	DecisionProgressCheckpointSchema,
 	type DecisionProposal,
 	DecisionProposalBatchSchema,
 	type DecisionQualityReport,
+	PacketCheckpointSchema,
 	SchemaVersion,
+	SourceDecisionSchema,
 } from "../src/contracts.ts";
 import { sha256 } from "../src/hash.ts";
-import { pathExists, runDirectory, withFileLock } from "../src/io.ts";
-import { type DecisionWorkItem, LunaModel, LunaPromptRevision } from "../src/model-worker.ts";
+import {
+	nowIso,
+	partFileName,
+	pathExists,
+	readJson,
+	readJsonLines,
+	runDirectory,
+	withFileLock,
+	writeJsonAtomic,
+	writeJsonLinesAtomic,
+} from "../src/io.ts";
+import {
+	classifyLunaWorkerFailure,
+	codexLunaArguments,
+	type DecisionWorkItem,
+	LunaModel,
+	LunaPromptRevision,
+	LunaWorkerFailure,
+} from "../src/model-worker.ts";
 import {
 	assertAuditAllowsResume,
 	compileDecisionProposals,
@@ -45,6 +66,27 @@ test("worker output schema uses the supported closed-object structured-output su
 		for (const child of Object.values(object)) inspect(child);
 	};
 	inspect(schema);
+});
+
+test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
+	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
+	expect(arguments_).toContain("--ignore-user-config");
+	expect(arguments_).toContain("fast_mode");
+	expect(arguments_).toContain("shell_tool");
+	expect(arguments_).toContain('forced_login_method="chatgpt"');
+	expect(arguments_).toContain('service_tier="default"');
+	expect(arguments_).toContain('model_reasoning_effort="medium"');
+	expect(arguments_).toContain('web_search="disabled"');
+	expect(arguments_).toContain("project_doc_max_bytes=0");
+	expect(arguments_).toContain("--skip-git-repo-check");
+	expect(arguments_.at(-1)).toBe("-");
+});
+
+test("worker failures distinguish exhausted allowance from transient rate limiting", () => {
+	expect(classifyLunaWorkerFailure("429 rate limit: usage_limit_reached")).toBe("usage_allowance");
+	expect(classifyLunaWorkerFailure("429 too many requests")).toBe("rate_limit");
+	expect(classifyLunaWorkerFailure("401 unauthorized")).toBe("authentication");
+	expect(classifyLunaWorkerFailure("unexpected process exit")).toBe("execution");
 });
 
 function sourceBook(id: string, title: string): BookEvidence {
@@ -256,7 +298,7 @@ test("orchestration lock rejects a second coordinator", async () => {
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
 		});
-		const lockPath = `${directory}\\.work\\orchestrator.lock`;
+		const lockPath = join(directory, ".work", "orchestrator.lock");
 		await withFileLock(lockPath, async () => {
 			await expect(runConcurrentReconciliation(config)).rejects.toThrow("Could not acquire lock");
 		});
@@ -315,7 +357,141 @@ test("failed worker drains in-flight work without recording and releases the coo
 		).rejects.toThrow("Luna worker failed after 1 attempts");
 		expect(drained).toBeTrue();
 		expect(recorded).toBeFalse();
-		expect(await pathExists(`${directory}\\.work\\orchestrator.lock`)).toBeFalse();
+		expect(await pathExists(join(directory, ".work", "orchestrator.lock"))).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test.each(["usage_allowance", "authentication"] as const)(
+	"coordinator stops on %s without spending retries or recording fallback decisions",
+	async (category) => {
+		const runId = `work-stop-${category.replaceAll("_", "-")}-${Date.now()}`;
+		const directory = runDirectory(runId);
+		try {
+			const config = await initializeRun({
+				runId,
+				rezicsRef: "v1.7.0",
+				cutoff: "2026-09-02T16:00:00.000Z",
+			});
+			const source = sourceBook(randomUUID(), "额度停止测试");
+			const item = {
+				packet: buildReviewPacket(config, 0, "额度停止测试", [source], []),
+				undecidedSourceUnitIds: [source.id],
+			};
+			let attempts = 0;
+			let recorded = false;
+			await expect(
+				runConcurrentReconciliation(config, {
+					maxAttempts: 3,
+					dependencies: {
+						worker: {
+							async decide() {
+								attempts += 1;
+								throw new LunaWorkerFailure(category, "fixture");
+							},
+						},
+						next: async () => [item],
+						record: async () => {
+							recorded = true;
+							return { recorded: 0 };
+						},
+						status: async () => ({
+							packetCount: 0,
+							sourceCount: 0,
+							decisionCount: 0,
+							remainingCount: 0,
+							onlineComplete: false,
+						}),
+					},
+				}),
+			).rejects.toThrow(category.replaceAll("_", " "));
+			expect(attempts).toBe(1);
+			expect(recorded).toBeFalse();
+			expect(await pathExists(join(directory, ".work", "orchestrator.lock"))).toBeFalse();
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+test("default 32-by-2 workers persist a 64-source part and odd tail then resume without duplication", async () => {
+	const runId = `work-defaults-${randomUUID()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		expect(config.onlineBatchSize).toBe(64);
+		const sources = Array.from({ length: 65 }, (_, index) =>
+			sourceBook(randomUUID(), `完整作品${index}`),
+		).sort((left, right) => left.id.localeCompare(right.id));
+		const packets = sources.map((source, index) =>
+			buildReviewPacket(config, Math.floor(index / 64), source.id, [source], []),
+		);
+		await writeJsonLinesAtomic(join(directory, "packets", partFileName(0)), packets.slice(0, 64));
+		await writeJsonLinesAtomic(join(directory, "packets", partFileName(1)), packets.slice(64));
+		const lastSource = sources.at(-1);
+		if (!lastSource) throw new Error("Fixture source missing");
+		await writeJsonAtomic(
+			join(directory, "packets", "checkpoint.json"),
+			PacketCheckpointSchema.parse({
+				schemaVersion: SchemaVersion,
+				runId,
+				evidenceMode: "online-batched",
+				lastSourceCreatedAt: lastSource.createdAt,
+				lastSourceUnitId: lastSource.id,
+				sourceCount: 65,
+				packetCount: 65,
+				nextPart: 2,
+				complete: true,
+				updatedAt: nowIso(),
+			}),
+		);
+		let active = 0;
+		let maximumActive = 0;
+		const batchSizes: number[] = [];
+		const worker = {
+			async decide(batch: readonly DecisionWorkItem[]) {
+				active += 1;
+				maximumActive = Math.max(maximumActive, active);
+				batchSizes.push(batch.length);
+				try {
+					await Bun.sleep(5);
+					return batch.map(({ packet }) => {
+						const source = packet.candidates[0];
+						if (!source) throw new Error("Fixture source missing");
+						return proposal(source);
+					});
+				} finally {
+					active -= 1;
+				}
+			},
+		};
+		const result = await runConcurrentReconciliation(config, { dependencies: { worker } });
+		expect(maximumActive).toBe(32);
+		expect(batchSizes).toEqual([...Array.from({ length: 32 }, () => 2), 1]);
+		expect(result).toMatchObject({ decisionCount: 65, onlineComplete: true, workerRetries: 0 });
+		expect(result.audit.status).toBe("passed");
+		const recordedIds: string[] = [];
+		for (const part of [0, 1])
+			for await (const decision of readJsonLines(
+				join(directory, "decisions", partFileName(part)),
+				SourceDecisionSchema,
+			))
+				recordedIds.push(decision.sourceUnitId);
+		expect(recordedIds).toEqual(sources.map(({ id }) => id));
+		expect(
+			await readJson(
+				join(directory, "decisions", "checkpoint.json"),
+				DecisionProgressCheckpointSchema,
+			),
+		).toMatchObject({ completedThroughPart: 1 });
+		const resumed = await runConcurrentReconciliation(config, { dependencies: { worker } });
+		expect(resumed.decisionCount).toBe(65);
+		expect(batchSizes).toHaveLength(33);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

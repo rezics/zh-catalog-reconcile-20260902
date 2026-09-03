@@ -23,6 +23,7 @@ export type InitializeRunInput = {
 	readonly rezicsRef: string;
 	readonly cutoff: string;
 	readonly afterRunId?: string;
+	readonly onlineBatchSize?: number;
 };
 
 export async function initializeRun(input: InitializeRunInput): Promise<RunConfig> {
@@ -71,7 +72,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		applyState: "locked",
 		decisionPolicyRevision: CurrentDecisionPolicyRevision,
 		sourceStart,
-		onlineBatchSize: 20,
+		onlineBatchSize: input.onlineBatchSize ?? 64,
 		maxCandidatesPerPacket: 20,
 	});
 

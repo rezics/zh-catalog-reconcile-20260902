@@ -39,13 +39,18 @@ Use an immutable creation cutoff and observed REZICS release or image digest:
 bun run reconcile init `
   --run prod-online-20260903 `
   --rezics-ref v1.7.0 `
-  --cutoff 2026-09-02T16:00:00.000Z
+  --cutoff 2026-09-02T16:00:00.000Z `
+  --online-batch-size 64
 ```
 
 To start a new policy run immediately after a previously captured online run, add
 `--after-run <run-id>`. The runner validates that predecessor's packet cursor, cutoff, and
 REZICS reference, and records the cursor as new-run metadata; it does not copy or resume the
 predecessor's decisions.
+
+New runs default to 64 sources per page. `--online-batch-size` accepts integers from 1 to 100 and
+is persisted at initialization. Existing runs retain their page size; do not edit their run JSON
+to change it.
 
 Initialization is offline and writes `evidenceMode: "online-batched"` with `applyState: "locked"`.
 It also writes `decisionPolicyRevision: "evidence-claims-v3"`. Do not resume a run reported as
@@ -95,7 +100,7 @@ For a complete run, prefer the single-coordinator concurrent inference command:
 ```powershell
 bun run reconcile work `
   --run full-online-luna-20260904 `
-  --concurrency 8 `
+  --concurrency 32 `
   --packets-per-worker 2 `
   --progress-every 1000
 ```
@@ -104,7 +109,55 @@ bun run reconcile work `
 operator interrupts it. Only ephemeral `gpt-5.6-luna` inference is concurrent; capture and record
 remain single-owner. On interruption, wait for the command to release its orchestration lock,
 then run the same command to resume. Never use a run containing decisions from a different model
-or prompt revision, and never use `--after-run` to skip an untrusted decision range.
+or prompt revision, and never use `--after-run` to skip an untrusted decision range. Workers force
+ChatGPT login, standard (non-Fast) service, medium reasoning, and a tool-free isolated Codex
+configuration. They never redeem a usage reset; an exhausted allowance is a resumable stop.
+
+## Linux full run
+
+Use the existing Linux checkout of this reconciliation repository, not the main REZICS checkout
+or a Windows `D:` path. Require Bun 1.4 or newer and a Codex CLI supporting the worker's flags,
+logged in with ChatGPT. Resolve the operator-approved secret and SSH-key paths on Linux; omit an
+unneeded interface selector and never copy a Windows interface name blindly. Do not change the
+approved credential profile or print credentials.
+
+After repository checks and `doctor` pass, initialize a fresh replacement run from the beginning:
+
+```bash
+bun run reconcile init \
+  --run full-online-luna-20260904 \
+  --rezics-ref v1.7.0 \
+  --cutoff 2026-09-02T16:00:00.000Z \
+  --online-batch-size 64
+bun run reconcile probe --run full-online-luna-20260904
+bun run reconcile inventory --run full-online-luna-20260904
+bun run reconcile work \
+  --run full-online-luna-20260904 \
+  --concurrency 32 \
+  --packets-per-worker 2 \
+  --progress-every 100
+```
+
+Never initialize an existing ID again. Inspect its policy, actor protocol, source start, cutoff,
+REZICS reference, and persisted page size before resuming. Never use `--after-run` to skip an
+untrusted predecessor.
+
+`probe` reads the page after the captured cursor, even if that run has pending decisions. It
+does not advance checkpoints, persist evidence, or call Luna. Its optional `--online-batch-size`
+overrides only this diagnostic read, not the run configuration. For a nonempty page, each of
+three SELECTs runs normally and again under `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, within the
+same guarded read-only transaction. Do not run it for every part. `roundTripMs` includes normal
+result delivery; EXPLAIN execution skips that delivery and may use warmer caches. `elapsedMs`
+includes connection and diagnostic overhead, so it is not a normal page-throughput measurement.
+Output omits evidence, IDs, query literals, and credentials. The probe rejects observed candidate
+base-table/index traversal exceeding the candidate bound, considering filtered rows and per-loop
+rounding. Investigate broad scans, temporary spills, and timeouts before starting work; one sample
+is not a p95 benchmark or proof of the search function's internal plan.
+
+The `work.started` event records configured and maximum effective parallelism. With a full
+64-source page, 32 requests carry two packets each; tail pages use fewer requests. Database
+capture and recording still have one owner. `--progress-every 100` controls reporting only, not
+the number of decisions or duration of the run.
 
 ## 6. Validate and plan actions
 

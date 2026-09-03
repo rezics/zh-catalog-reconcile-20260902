@@ -82,16 +82,25 @@ evidence remain in the predecessor run.
 Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
 
 ```powershell
-bun run reconcile work --run full-online-luna-20260904 --concurrency 8 --packets-per-worker 2
+bun run reconcile work --run full-online-luna-20260904 --concurrency 32 --packets-per-worker 2
 ```
 
 Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no
-`--target` or count limit on `work`; concurrency is bounded independently from total work.
+`--target` or count limit on `work`; concurrency is bounded independently from total work. Luna
+workers explicitly use ChatGPT authentication, standard (non-Fast) service, medium reasoning,
+and no tools; they do not inherit the operator's model, Fast, plugin, or MCP configuration.
+
+New runs capture 64 sources per database page, enough for 32 concurrent two-packet requests.
+Set `init --online-batch-size N` (1–100) to choose a different persisted page size. Existing runs
+retain their original size; inference concurrency does not increase database concurrency above
+one. The [Linux runbook](./docs/runbook.md#linux-full-run) covers execution on a separate host.
 
 Database commands accept either `REZICS_DATABASE_SECRET_FILE` or a dedicated
 `REZICS_DATABASE_READONLY_URL`, never both. With the secret document, the runner can reach a
 private PostgreSQL listener through a loopback-only SSH stdio bridge without exposing PostgreSQL,
 using SSH port forwarding, or changing the server. Run `bun run reconcile doctor` before a run.
+After doctor passes, `probe --run ID` measures one bounded page and sanitized query plans without
+persisting evidence, advancing the cursor, or invoking a model.
 
 The monitoring profile is the default. If an operator explicitly selects the runtime profile
 because monitoring lacks catalog access, the runner requires PostgreSQL connection-startup

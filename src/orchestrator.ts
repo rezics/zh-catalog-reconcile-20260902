@@ -25,8 +25,15 @@ import {
 	type DecisionWorkItem,
 	LunaModel,
 	LunaPromptRevision,
+	LunaWorkerFailure,
 } from "./model-worker.ts";
 import { readPacketCheckpoint } from "./packets.ts";
+
+export const WorkDefaults = {
+	concurrency: 32,
+	packetsPerWorker: 2,
+	progressEvery: 1_000,
+} as const;
 
 export type WorkProgress = {
 	readonly decisionCount: number;
@@ -156,10 +163,23 @@ async function decideWithRetry(
 		} catch (error) {
 			lastError = error;
 			if (signal?.aborted) throw signal.reason ?? error;
-			if (attempt < maxAttempts) await Bun.sleep(Math.min(2_000, 250 * 2 ** (attempt - 1)));
+			if (
+				error instanceof LunaWorkerFailure &&
+				(error.category === "usage_allowance" || error.category === "authentication")
+			)
+				throw error;
+			if (attempt < maxAttempts)
+				await Bun.sleep(
+					error instanceof LunaWorkerFailure && error.category === "rate_limit"
+						? 5_000 * attempt
+						: Math.min(2_000, 250 * 2 ** (attempt - 1)),
+				);
 		}
 	}
-	throw new Error(`Luna worker failed after ${maxAttempts} attempts`, { cause: lastError });
+	const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
+	throw new Error(`Luna worker failed after ${maxAttempts} attempts${detail}`, {
+		cause: lastError,
+	});
 }
 
 async function concurrently<T, R>(
@@ -194,15 +214,19 @@ export async function runConcurrentReconciliation(
 	config: RunConfig,
 	options: WorkOptions = {},
 ): Promise<WorkResult> {
-	const concurrency = positiveBoundedInteger(options.concurrency ?? 8, "concurrency", 32);
+	const concurrency = positiveBoundedInteger(
+		options.concurrency ?? WorkDefaults.concurrency,
+		"concurrency",
+		32,
+	);
 	const packetsPerWorker = positiveBoundedInteger(
-		options.packetsPerWorker ?? 2,
+		options.packetsPerWorker ?? WorkDefaults.packetsPerWorker,
 		"packetsPerWorker",
 		5,
 	);
 	const maxAttempts = positiveBoundedInteger(options.maxAttempts ?? 3, "maxAttempts", 5);
 	const progressEvery = positiveBoundedInteger(
-		options.progressEvery ?? 1_000,
+		options.progressEvery ?? WorkDefaults.progressEvery,
 		"progressEvery",
 		1_000_000,
 	);
@@ -234,6 +258,15 @@ export async function runConcurrentReconciliation(
 							"Existing decisions do not belong to this Luna worker protocol; initialize a replacement run",
 						);
 		}
+		await appendRunEvent(config.runId, "work.started", {
+			concurrency,
+			packetsPerWorker,
+			onlineBatchSize: config.onlineBatchSize,
+			maximumActiveRequests: Math.min(
+				concurrency,
+				Math.ceil(config.onlineBatchSize / packetsPerWorker),
+			),
+		});
 		let nextProgress = (Math.floor(decisionCount / progressEvery) + 1) * progressEvery;
 		for (;;) {
 			if (options.signal?.aborted)

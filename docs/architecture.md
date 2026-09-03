@@ -30,7 +30,10 @@ The full-run `work` command preserves a single capture/write path and fans out o
 inference. One coordinator reads a persisted packet part, splits it into bounded work items,
 runs ephemeral Luna processes concurrently, validates all returned proposals, and records the
 part through one writer. Workers cannot choose run IDs, packet hashes, timestamps, or actor
-identity and never receive database credentials.
+identity. Each worker runs with isolated Codex user configuration, ChatGPT-only authentication,
+standard (non-Fast) service, no project instructions, and disabled shell, browsing, app/plugin,
+and subagent tools, so it cannot inherit the operator's plugins, MCP servers, model, or Fast
+setting.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while
@@ -50,6 +53,13 @@ come from the existing bounded `search_text_candidates` function with `unit_kind
 language boundary, a posting budget, and a result limit. A single SQL statement invokes that
 function laterally for all sources in the page, avoiding client N+1 round trips. Evidence loading
 then uses one bounded ID set and indexed relationships.
+
+Candidate Unit-eligibility and Book-subtype proofs each use a parameterized lateral ID lookup
+with `LIMIT 1`. The limits preserve unique-key semantics while preventing flattening into merge
+joins that walk whole Unit or Book indexes. The read-only `probe` checks scan traversal, including
+filtered-out rows, against the bounded candidate count and emits sanitized timing and plan nodes.
+This follows PostgreSQL's [lateral evaluation semantics](https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-LATERAL)
+and is verified with [EXPLAIN ANALYZE](https://www.postgresql.org/docs/current/using-explain.html).
 
 Every page runs in a repeatable-read, read-only transaction with a statement timeout. The
 transaction ends before packet persistence and model inference.
@@ -103,3 +113,11 @@ The local runner applies backpressure by fetching a new batch only after all per
 have decisions. At hundreds of millions of sources, partition the creation keyspace, run multiple
 rate-limited workers, and replace repo-local packet parts with durable object storage. Do not turn
 the online design back into a complete local export to scale it.
+
+New runs default to 64 one-source packets per page and 32 concurrent requests carrying two
+packets each. Initialization accepts page sizes from 1 to 100; old runs retain their persisted
+size. Effective parallelism is at most `min(concurrency, ceil(pageSize / packetsPerWorker))`,
+with fewer requests on a tail page. Increasing worker concurrency without enough packets cannot
+add parallelism. Capture remains one short transaction at a time and is never multiplied by
+inference concurrency. Process memory, rate limits, capture latency, and part barriers still
+determine sustained throughput; configured parallelism is not a proportional-speedup guarantee.

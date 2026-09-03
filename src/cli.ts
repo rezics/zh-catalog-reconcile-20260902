@@ -2,8 +2,9 @@ import { captureInventory, databaseDoctor } from "./database.ts";
 import { auditDecisionQuality } from "./decision-quality.ts";
 import { nextPackets, recordDecisions, runStatus } from "./decisions.ts";
 import { loadRunConfig } from "./io.ts";
-import { runConcurrentReconciliation } from "./orchestrator.ts";
+import { runConcurrentReconciliation, WorkDefaults } from "./orchestrator.ts";
 import { generateManifest } from "./planner.ts";
+import { probeOnlinePage } from "./probe.ts";
 import { initializeRun } from "./run.ts";
 
 const usage = `
@@ -11,8 +12,9 @@ Usage: bun run reconcile <command> [options]
 
 Commands:
   doctor
-  init       --run ID --rezics-ref REF --cutoff ISO [--after-run ID]
+  init       --run ID --rezics-ref REF --cutoff ISO [--after-run ID] [--online-batch-size N]
   inventory  --run ID
+  probe      --run ID [--online-batch-size N]  (read-only timings and EXPLAIN; no checkpoint writes)
   next       --run ID [--limit N]  (fetches the next online batch when needed)
   record     --run ID --file PATH
   work       --run ID [--concurrency N] [--packets-per-worker N] [--progress-every N]
@@ -21,6 +23,7 @@ Commands:
   plan       --run ID
 
 There is intentionally no apply command.
+New runs default to 64 sources per database page; work defaults to 32 workers, 2 packets each.
 `.trim();
 
 function options(args: readonly string[]): Map<string, string> {
@@ -75,12 +78,23 @@ async function main(): Promise<void> {
 
 	switch (command) {
 		case "init": {
+			const allowed = new Set([
+				"--run",
+				"--rezics-ref",
+				"--cutoff",
+				"--after-run",
+				"--online-batch-size",
+			]);
+			for (const key of values.keys())
+				if (!allowed.has(key)) throw new Error(`init does not accept ${key}`);
 			const afterRunId = values.get("--after-run");
+			const onlineBatchSize = integerOption(values, "--online-batch-size");
 			const result = await initializeRun({
 				runId,
 				rezicsRef: required(values, "--rezics-ref"),
 				cutoff: required(values, "--cutoff"),
 				...(afterRunId === undefined ? {} : { afterRunId }),
+				...(onlineBatchSize === undefined ? {} : { onlineBatchSize }),
 			});
 			print(result);
 			return;
@@ -92,6 +106,18 @@ async function main(): Promise<void> {
 		case "next": {
 			print(
 				await nextPackets(await loadRunConfig(runId), integerOption(values, "--limit", 10) ?? 10),
+			);
+			return;
+		}
+		case "probe": {
+			for (const key of values.keys())
+				if (key !== "--run" && key !== "--online-batch-size")
+					throw new Error(`probe does not accept ${key}`);
+			print(
+				await probeOnlinePage(
+					await loadRunConfig(runId),
+					integerOption(values, "--online-batch-size"),
+				),
 			);
 			return;
 		}
@@ -116,9 +142,10 @@ async function main(): Promise<void> {
 			try {
 				print(
 					await runConcurrentReconciliation(await loadRunConfig(runId), {
-						concurrency: integerOption(values, "--concurrency", 8) ?? 8,
-						packetsPerWorker: integerOption(values, "--packets-per-worker", 2) ?? 2,
-						progressEvery: integerOption(values, "--progress-every", 1_000) ?? 1_000,
+						concurrency: integerOption(values, "--concurrency") ?? WorkDefaults.concurrency,
+						packetsPerWorker:
+							integerOption(values, "--packets-per-worker") ?? WorkDefaults.packetsPerWorker,
+						progressEvery: integerOption(values, "--progress-every") ?? WorkDefaults.progressEvery,
 						signal: controller.signal,
 						onProgress: (progress) => print({ progress }),
 					}),

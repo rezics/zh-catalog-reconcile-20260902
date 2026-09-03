@@ -13,6 +13,22 @@ import { repositoryRoot } from "./io.ts";
 export const LunaModel = "gpt-5.6-luna" as const;
 export const LunaPromptRevision = "full-online-luna-v1" as const;
 
+export type LunaWorkerFailureCategory =
+	| "rate_limit"
+	| "usage_allowance"
+	| "authentication"
+	| "execution";
+
+export class LunaWorkerFailure extends Error {
+	readonly category: LunaWorkerFailureCategory;
+
+	constructor(category: LunaWorkerFailureCategory, detail: string) {
+		super(`Luna worker ${category.replaceAll("_", " ")} failure (${detail})`);
+		this.name = "LunaWorkerFailure";
+		this.category = category;
+	}
+}
+
 export type DecisionWorkItem = {
 	readonly packet: ReviewPacket;
 	readonly undecidedSourceUnitIds: readonly string[];
@@ -58,6 +74,59 @@ function boundedStderr(current: string, chunk: Buffer): string {
 	return `${current}${chunk.toString("utf8")}`.slice(-32_000);
 }
 
+export function classifyLunaWorkerFailure(stderr: string): LunaWorkerFailureCategory {
+	if (/usage[ _-]?limit|quota|allowance/iu.test(stderr)) return "usage_allowance";
+	if (/rate.?limit|too many requests|\b429\b/iu.test(stderr)) return "rate_limit";
+	if (/authentication|unauthorized|\b401\b/iu.test(stderr)) return "authentication";
+	return "execution";
+}
+
+export function codexLunaArguments(outputPath: string, workingDirectory: string): string[] {
+	return [
+		"exec",
+		"--ephemeral",
+		"--ignore-user-config",
+		"--model",
+		LunaModel,
+		"--sandbox",
+		"read-only",
+		"--color",
+		"never",
+		"--disable",
+		"fast_mode",
+		"--disable",
+		"shell_tool",
+		"--disable",
+		"browser_use",
+		"--disable",
+		"apps",
+		"--disable",
+		"plugins",
+		"--disable",
+		"memories",
+		"--disable",
+		"multi_agent",
+		"-c",
+		'forced_login_method="chatgpt"',
+		"-c",
+		'service_tier="default"',
+		"-c",
+		'model_reasoning_effort="medium"',
+		"-c",
+		'web_search="disabled"',
+		"-c",
+		"project_doc_max_bytes=0",
+		"--output-schema",
+		join(repositoryRoot, "schemas", "decision-proposal-batch.schema.json"),
+		"--output-last-message",
+		outputPath,
+		"--skip-git-repo-check",
+		"--cd",
+		workingDirectory,
+		"-",
+	];
+}
+
 export class CodexLunaDecisionWorker implements DecisionWorker {
 	readonly #executable: string;
 
@@ -83,29 +152,11 @@ export class CodexLunaDecisionWorker implements DecisionWorker {
 		const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 		await mkdir(requestDirectory, { recursive: true });
 		try {
-			const arguments_ = [
-				"exec",
-				"--ephemeral",
-				"--model",
-				LunaModel,
-				"--sandbox",
-				"read-only",
-				"--color",
-				"never",
-				"-c",
-				'model_reasoning_effort="medium"',
-				"--output-schema",
-				join(repositoryRoot, "schemas", "decision-proposal-batch.schema.json"),
-				"--output-last-message",
-				outputPath,
-				"--cd",
-				repositoryRoot,
-				"-",
-			];
+			const arguments_ = codexLunaArguments(outputPath, requestDirectory);
 			let stderr = "";
 			await new Promise<void>((resolve, reject) => {
 				const child = spawn(this.#executable, arguments_, {
-					cwd: repositoryRoot,
+					cwd: requestDirectory,
 					shell: false,
 					windowsHide: true,
 					stdio: ["pipe", "ignore", "pipe"],
@@ -119,16 +170,11 @@ export class CodexLunaDecisionWorker implements DecisionWorker {
 				child.once("close", (code, childSignal) => {
 					if (code === 0) resolve();
 					else {
-						const category = /rate.?limit|too many requests|\b429\b/iu.test(stderr)
-							? "rate limit"
-							: /usage limit|quota|allowance/iu.test(stderr)
-								? "usage allowance"
-								: /authentication|unauthorized|\b401\b/iu.test(stderr)
-									? "authentication"
-									: "execution";
+						const category = classifyLunaWorkerFailure(stderr);
 						reject(
-							new Error(
-								`Luna worker ${category} failure (code ${code ?? "null"}, signal ${childSignal ?? "none"})`,
+							new LunaWorkerFailure(
+								category,
+								`code ${code ?? "null"}, signal ${childSignal ?? "none"}`,
 							),
 						);
 					}

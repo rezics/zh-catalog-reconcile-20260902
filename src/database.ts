@@ -23,6 +23,7 @@ import {
 } from "./database-config.ts";
 import { sha256 } from "./hash.ts";
 import { appendRunEvent, nowIso, repositoryRoot, runDirectory, writeJsonAtomic } from "./io.ts";
+import { parseQueryProfile, type QueryProfile, type QueryStage } from "./query-profile.ts";
 
 const StatementTimeout = "120s";
 
@@ -251,6 +252,7 @@ export type OnlineCatalogReader = {
 export async function withOnlineCatalog<Result>(
 	config: RunConfig,
 	operation: (reader: OnlineCatalogReader) => Promise<Result>,
+	options: { readonly onQueryProfile?: (profile: QueryProfile) => void } = {},
 ): Promise<Result> {
 	const [sourceQuery, candidateQuery, evidenceQuery] = await Promise.all([
 		readFile(join(repositoryRoot, "sql", "online-source-page.sql"), "utf8"),
@@ -272,7 +274,24 @@ export async function withOnlineCatalog<Result>(
 				throw new Error("Online source cursor fields must be supplied together");
 
 			const { groups } = await queryReadOnly(async (sql) => {
-				const rawSources = await sql.unsafe<Record<string, unknown>[]>(sourceQuery, [
+				const execute = async (
+					stage: QueryStage,
+					query: string,
+					parameters: postgres.ParameterOrJSON<never>[],
+				): Promise<Record<string, unknown>[]> => {
+					const startedAt = performance.now();
+					const rows = await sql.unsafe<Record<string, unknown>[]>(query, parameters);
+					const roundTripMs = performance.now() - startedAt;
+					if (options.onQueryProfile) {
+						const plans = await sql.unsafe<Record<string, unknown>[]>(
+							`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`,
+							parameters,
+						);
+						options.onQueryProfile(parseQueryProfile(stage, roundTripMs, plans[0]?.["QUERY PLAN"]));
+					}
+					return rows;
+				};
+				const rawSources = await execute("source_page", sourceQuery, [
 					config.cutoff,
 					input.afterCreatedAt,
 					input.afterUnitId,
@@ -281,7 +300,7 @@ export async function withOnlineCatalog<Result>(
 				const sources = rawSources.map((source) => OnlineSourceRowSchema.parse(source));
 				if (sources.length === 0) return { groups: [] as OnlineEvidenceGroup[] };
 
-				const rawLinks = await sql.unsafe<Record<string, unknown>[]>(candidateQuery, [
+				const rawLinks = await execute("candidate_search", candidateQuery, [
 					sql.json(sources.map(({ id, title }) => ({ sourceUnitId: id, title }))),
 					input.maxCandidates,
 					config.cutoff,
@@ -289,7 +308,7 @@ export async function withOnlineCatalog<Result>(
 				const links = rawLinks.map((link) => OnlineCandidateLinkSchema.parse(link));
 				const requestedIds = new Set(sources.map(({ id }) => id));
 				for (const link of links) requestedIds.add(link.candidateUnitId);
-				const evidenceRows = await sql.unsafe<{ readonly record: unknown }[]>(evidenceQuery, [
+				const evidenceRows = await execute("book_evidence", evidenceQuery, [
 					sql.json([...requestedIds]),
 					config.cutoff,
 				]);

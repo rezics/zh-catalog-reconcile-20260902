@@ -54,6 +54,11 @@ secret profile defaults to monitoring. Use runtime only when the operator alread
 and doctor proves both session-default and per-transaction read-only behavior.
 
 For a new run, use a new ID and fixed creation cutoff. Never reinitialize or delete a run.
+New full runs use `init --online-batch-size 64`; old runs keep their persisted page size. After
+doctor passes, use `probe --run <run-id>` to inspect one read-only page before full execution.
+It does not persist evidence, advance checkpoints, or invoke a model. Investigate broad scans,
+spills, and timeouts rather than weakening its checks. On Linux, use the reconciliation checkout
+and authorized local secret/key paths; do not copy Windows paths or interface selectors blindly.
 
 ## Work online in bounded batches
 
@@ -126,14 +131,15 @@ For a fresh full-corpus Luna run, use one coordinator with bounded inference con
 set or simulate a durable decision target:
 
 ```powershell
-bun run reconcile work --run <run-id> --concurrency 8 --packets-per-worker 2
+bun run reconcile work --run <run-id> --concurrency 32 --packets-per-worker 2
 ```
 
 The coordinator alone may call `next` and `record`. Ephemeral workers return typed semantic
 proposals and must not browse, access the database, or use deterministic disposition rules. A
 question-shaped title is not a query merely because it contains punctuation. Resume the same
 command after an operator interruption; do not resume a run whose decisions use another model or
-prompt revision.
+prompt revision. Workers use ChatGPT login with standard (non-Fast) service and never redeem an
+account reset. Exhausted allowance is a resumable stop requiring operator action.
 
 Continue until status reports `onlineComplete: true`, zero remaining packets, and full decision
 coverage. Require `audit` to report `passed`, then run:

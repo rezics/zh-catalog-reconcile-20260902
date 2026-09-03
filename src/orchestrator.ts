@@ -1,6 +1,8 @@
 import { join } from "node:path";
 
 import {
+	CurrentLunaWorkerProtocol,
+	type DecisionEvidenceCitation,
 	type DecisionProposal,
 	type DecisionQualityReport,
 	type ReviewPacket,
@@ -22,6 +24,7 @@ import {
 import {
 	CodexLunaDecisionWorker,
 	type DecisionWorker,
+	type DecisionWorkerFeedbackCode,
 	type DecisionWorkItem,
 	LunaModel,
 	LunaPromptRevision,
@@ -78,6 +81,18 @@ export function assertAuditAllowsResume(report: DecisionQualityReport): void {
 		);
 }
 
+export function assertCurrentWorkerProtocol(config: RunConfig): void {
+	if (
+		config.workerProtocol?.kind !== CurrentLunaWorkerProtocol.kind ||
+		config.workerProtocol.model !== CurrentLunaWorkerProtocol.model ||
+		config.workerProtocol.promptRevision !== CurrentLunaWorkerProtocol.promptRevision ||
+		config.workerProtocol.proposalProtocol !== CurrentLunaWorkerProtocol.proposalProtocol
+	)
+		throw new Error(
+			`Run is not pinned to ${CurrentLunaWorkerProtocol.promptRevision}; initialize a fresh full run with --worker-protocol ${CurrentLunaWorkerProtocol.promptRevision}`,
+		);
+}
+
 function positiveBoundedInteger(value: number, name: string, maximum: number): number {
 	if (!Number.isSafeInteger(value) || value < 1 || value > maximum)
 		throw new Error(`${name} must be an integer from 1 through ${maximum}`);
@@ -89,9 +104,43 @@ function proposalDecision(
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
 ): SourceDecision {
-	const { note, ...semanticFields } = proposal;
+	const citations: DecisionEvidenceCitation[] = [];
+	const citationIndexes = new Map<string, number>();
+	const linkCitations = (claimCitations: readonly DecisionEvidenceCitation[]): number[] => [
+		...new Set(
+			claimCitations.map((citation) => {
+				const key = JSON.stringify([citation.unitId, citation.field, citation.excerpt]);
+				const existing = citationIndexes.get(key);
+				if (existing !== undefined) return existing;
+				const index = citations.length;
+				citations.push(citation);
+				citationIndexes.set(key, index);
+				return index;
+			}),
+		),
+	];
+	const { note, ...proposalFields } = proposal;
+	const semanticFields =
+		proposalFields.disposition === "review"
+			? {
+					...proposalFields,
+					uncertainties: proposalFields.uncertainties.map(
+						({ citations: claimCitations, ...uncertainty }) => ({
+							...uncertainty,
+							citationIndexes: linkCitations(claimCitations),
+						}),
+					),
+				}
+			: {
+					...proposalFields,
+					basis: proposalFields.basis.map(({ citations: claimCitations, ...basis }) => ({
+						...basis,
+						citationIndexes: linkCitations(claimCitations),
+					})),
+				};
 	const decision = SourceDecisionSchema.parse({
 		...semanticFields,
+		citations,
 		...(note === null ? {} : { note }),
 		schemaVersion: SchemaVersion,
 		runId: config.runId,
@@ -107,6 +156,27 @@ function proposalDecision(
 	});
 	validateDecisionAgainstPacket(config, packet, decision);
 	return decision;
+}
+
+export function classifyDecisionWorkerFeedback(error: unknown): DecisionWorkerFeedbackCode {
+	if (error instanceof SyntaxError || error instanceof TypeError) return "output_schema_invalid";
+	if (error && typeof error === "object" && "issues" in error) return "output_schema_invalid";
+	const message = error instanceof Error ? error.message : "";
+	if (/Worker (assignment|returned|omitted)/u.test(message)) return "assignment_invalid";
+	if (/Keep requires|Merge requires|Soft-delete reason|Revision reason/iu.test(message))
+		return "disposition_evidence_invalid";
+	if (/^Basis\b|\bbasis\b/iu.test(message)) return "basis_invalid";
+	if (/^Uncertainty\b|\buncertainty\b|candidate ambiguity/iu.test(message))
+		return "uncertainty_invalid";
+	if (/citation|evidence outside|packet field/iu.test(message)) return "citation_invalid";
+	return "decision_validation_invalid";
+}
+
+function workFailureCode(error: unknown): string {
+	if (error instanceof LunaWorkerFailure) return `luna_${error.category}`;
+	if (error instanceof Error && error.message.startsWith("Luna worker failed after"))
+		return "worker_attempts_exhausted";
+	return "coordinator_error";
 }
 
 export function compileDecisionProposals(
@@ -153,11 +223,19 @@ async function decideWithRetry(
 	signal?: AbortSignal,
 ): Promise<{ readonly decisions: SourceDecision[]; readonly retries: number }> {
 	let lastError: unknown;
+	let feedback: DecisionWorkerFeedbackCode | undefined;
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		if (signal?.aborted) throw signal.reason ?? new Error("Reconciliation interrupted");
 		try {
 			return {
-				decisions: compileDecisionProposals(config, items, await worker.decide(items, signal)),
+				decisions: compileDecisionProposals(
+					config,
+					items,
+					await worker.decide(items, {
+						...(signal === undefined ? {} : { signal }),
+						...(feedback === undefined ? {} : { feedback }),
+					}),
+				),
 				retries: attempt - 1,
 			};
 		} catch (error) {
@@ -168,6 +246,7 @@ async function decideWithRetry(
 				(error.category === "usage_allowance" || error.category === "authentication")
 			)
 				throw error;
+			if (!(error instanceof LunaWorkerFailure)) feedback = classifyDecisionWorkerFeedback(error);
 			if (attempt < maxAttempts)
 				await Bun.sleep(
 					error instanceof LunaWorkerFailure && error.category === "rate_limit"
@@ -214,6 +293,7 @@ export async function runConcurrentReconciliation(
 	config: RunConfig,
 	options: WorkOptions = {},
 ): Promise<WorkResult> {
+	assertCurrentWorkerProtocol(config);
 	const concurrency = positiveBoundedInteger(
 		options.concurrency ?? WorkDefaults.concurrency,
 		"concurrency",
@@ -259,6 +339,7 @@ export async function runConcurrentReconciliation(
 						);
 		}
 		await appendRunEvent(config.runId, "work.started", {
+			workerProtocol: CurrentLunaWorkerProtocol,
 			concurrency,
 			packetsPerWorker,
 			onlineBatchSize: config.onlineBatchSize,
@@ -282,9 +363,24 @@ export async function runConcurrentReconciliation(
 			}
 
 			const batches = chunks(pending, packetsPerWorker);
-			const decidedBatches = await concurrently(batches, concurrency, (batch) =>
-				decideWithRetry(config, dependencies.worker, batch, maxAttempts, options.signal),
-			);
+			let decidedBatches: Awaited<ReturnType<typeof decideWithRetry>>[];
+			try {
+				decidedBatches = await concurrently(batches, concurrency, (batch) =>
+					decideWithRetry(config, dependencies.worker, batch, maxAttempts, options.signal),
+				);
+			} catch (error) {
+				await appendRunEvent(
+					config.runId,
+					"work.failed",
+					{
+						failureCode: workFailureCode(error),
+						part: pending[0]?.packet.part ?? null,
+						requestCount: batches.length,
+					},
+					"error",
+				);
+				throw error;
+			}
 			const partRetries = decidedBatches.reduce((sum, batch) => sum + batch.retries, 0);
 			workerRetries += partRetries;
 			if (partRetries > 0)

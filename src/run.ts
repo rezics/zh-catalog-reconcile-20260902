@@ -7,6 +7,7 @@ import {
 	RunConfigSchema,
 	SchemaVersion,
 	SourceStartSchema,
+	type WorkerProtocol,
 } from "./contracts.ts";
 import {
 	appendRunEvent,
@@ -24,6 +25,7 @@ export type InitializeRunInput = {
 	readonly cutoff: string;
 	readonly afterRunId?: string;
 	readonly onlineBatchSize?: number;
+	readonly workerProtocol?: WorkerProtocol;
 };
 
 export async function initializeRun(input: InitializeRunInput): Promise<RunConfig> {
@@ -71,6 +73,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		evidenceMode: "online-batched",
 		applyState: "locked",
 		decisionPolicyRevision: CurrentDecisionPolicyRevision,
+		workerProtocol: input.workerProtocol ?? null,
 		sourceStart,
 		onlineBatchSize: input.onlineBatchSize ?? 64,
 		maxCandidatesPerPacket: 20,
@@ -85,6 +88,7 @@ export async function initializeRun(input: InitializeRunInput): Promise<RunConfi
 		rezicsRef: config.rezicsRef,
 		evidenceMode: config.evidenceMode,
 		decisionPolicyRevision: config.decisionPolicyRevision,
+		workerProtocol: config.workerProtocol,
 		sourceStart: config.sourceStart,
 		onlineBatchSize: config.onlineBatchSize,
 		applyState: config.applyState,

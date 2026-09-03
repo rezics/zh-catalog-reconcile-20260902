@@ -35,6 +35,14 @@ standard (non-Fast) service, no project instructions, and disabled shell, browsi
 and subagent tools, so it cannot inherit the operator's plugins, MCP servers, model, or Fast
 setting.
 
+Workers attach each exact citation directly to the typed basis or uncertainty it supports. The
+coordinator deterministically deduplicates citations and assigns the zero-based indexes used by
+the persisted decision schema. Workers never manage a separate citation array, so an unlinked
+citation cannot cross the proposal boundary. Validation failures are retried with a bounded typed
+feedback category; the feedback never changes a disposition or substitutes deterministic catalog
+heuristics. A terminal worker failure records only a bounded failure code, part number, and request
+count; raw prompts, responses, Unit IDs, and citation excerpts are not logged.
+
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while
 each packet captures the current source/candidate state and `updatedAt` values. Later mutation

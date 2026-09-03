@@ -1,3 +1,4 @@
+import { CurrentLunaWorkerProtocol, LunaWorkerPromptRevision } from "./contracts.ts";
 import { captureInventory, databaseDoctor } from "./database.ts";
 import { auditDecisionQuality } from "./decision-quality.ts";
 import { nextPackets, recordDecisions, runStatus } from "./decisions.ts";
@@ -12,7 +13,8 @@ Usage: bun run reconcile <command> [options]
 
 Commands:
   doctor
-  init       --run ID --rezics-ref REF --cutoff ISO [--after-run ID] [--online-batch-size N]
+  init       --run ID --rezics-ref REF --cutoff ISO [--after-run ID]
+             [--online-batch-size N] [--worker-protocol REV]
   inventory  --run ID
   probe      --run ID [--online-batch-size N]  (read-only timings and EXPLAIN; no checkpoint writes)
   next       --run ID [--limit N]  (fetches the next online batch when needed)
@@ -84,17 +86,24 @@ async function main(): Promise<void> {
 				"--cutoff",
 				"--after-run",
 				"--online-batch-size",
+				"--worker-protocol",
 			]);
 			for (const key of values.keys())
 				if (!allowed.has(key)) throw new Error(`init does not accept ${key}`);
 			const afterRunId = values.get("--after-run");
 			const onlineBatchSize = integerOption(values, "--online-batch-size");
+			const workerProtocol = values.get("--worker-protocol");
+			if (workerProtocol !== undefined && workerProtocol !== LunaWorkerPromptRevision)
+				throw new Error(
+					`--worker-protocol must be ${LunaWorkerPromptRevision}; omit it for manual decision runs`,
+				);
 			const result = await initializeRun({
 				runId,
 				rezicsRef: required(values, "--rezics-ref"),
 				cutoff: required(values, "--cutoff"),
 				...(afterRunId === undefined ? {} : { afterRunId }),
 				...(onlineBatchSize === undefined ? {} : { onlineBatchSize }),
+				...(workerProtocol === undefined ? {} : { workerProtocol: CurrentLunaWorkerProtocol }),
 			});
 			print(result);
 			return;

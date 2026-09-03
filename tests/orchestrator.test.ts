@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
+	CurrentLunaWorkerProtocol,
 	DecisionProgressCheckpointSchema,
 	type DecisionProposal,
 	DecisionProposalBatchSchema,
@@ -34,14 +35,22 @@ import {
 	LunaModel,
 	LunaPromptRevision,
 	LunaWorkerFailure,
+	workerPrompt,
 } from "../src/model-worker.ts";
 import {
 	assertAuditAllowsResume,
+	classifyDecisionWorkerFeedback,
 	compileDecisionProposals,
 	runConcurrentReconciliation,
 } from "../src/orchestrator.ts";
 import { buildReviewPacket } from "../src/packets.ts";
-import { initializeRun } from "../src/run.ts";
+import { type InitializeRunInput, initializeRun } from "../src/run.ts";
+
+function initializeWorkerRun(
+	input: Omit<InitializeRunInput, "workerProtocol">,
+): ReturnType<typeof initializeRun> {
+	return initializeRun({ ...input, workerProtocol: CurrentLunaWorkerProtocol });
+}
 
 test("worker output schema uses the supported closed-object structured-output subset", () => {
 	const schema = z.toJSONSchema(DecisionProposalBatchSchema, {
@@ -69,6 +78,7 @@ test("worker output schema uses the supported closed-object structured-output su
 });
 
 test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
+	expect(LunaPromptRevision).toBe("full-online-luna-v2");
 	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
 	expect(arguments_).toContain("--ignore-user-config");
 	expect(arguments_).toContain("fast_mode");
@@ -87,6 +97,24 @@ test("worker failures distinguish exhausted allowance from transient rate limiti
 	expect(classifyLunaWorkerFailure("429 too many requests")).toBe("rate_limit");
 	expect(classifyLunaWorkerFailure("401 unauthorized")).toBe("authentication");
 	expect(classifyLunaWorkerFailure("unexpected process exit")).toBe("execution");
+});
+
+test("worker prompt makes evidence claim-local and carries bounded retry feedback", () => {
+	const initial = workerPrompt([]);
+	expect(initial).toContain("Put citations directly inside\nthe basis or uncertainty");
+	expect(initial).toContain("do not\noutput citationIndexes");
+	expect(initial).not.toContain("previous response");
+
+	const retry = workerPrompt([], "citation_invalid");
+	expect(retry).toContain('validation category was "citation_invalid"');
+	expect(retry).toContain("without changing a semantic disposition merely");
+	expect(retry).toContain("nested under the claim each citation proves");
+	expect(classifyDecisionWorkerFeedback(new Error("Basis same_title is invalid"))).toBe(
+		"basis_invalid",
+	);
+	expect(classifyDecisionWorkerFeedback(new Error("Citation excerpt is not grounded"))).toBe(
+		"citation_invalid",
+	);
 });
 
 function sourceBook(id: string, title: string): BookEvidence {
@@ -133,19 +161,42 @@ function proposal(source: BookEvidence): DecisionProposal {
 	return {
 		sourceUnitId: source.id,
 		confidence: "high",
-		citations: [
-			{ unitId: source.id, field: "localization_title", excerpt: title },
-			{ unitId: source.id, field: "localization_summary", excerpt: summary },
-		],
 		note: null,
 		disposition: "keep",
 		reason: "distinct_work",
 		basis: [
-			{ code: "booklike_title", citationIndexes: [0] },
-			{ code: "synopsis_describes_work", citationIndexes: [1] },
+			{
+				code: "booklike_title",
+				citations: [{ unitId: source.id, field: "localization_title", excerpt: title }],
+			},
+			{
+				code: "synopsis_describes_work",
+				citations: [{ unitId: source.id, field: "localization_summary", excerpt: summary }],
+			},
 		],
 	};
 }
+
+test("worker proposal schema rejects the old top-level citation-index protocol", () => {
+	const source = sourceBook(randomUUID(), "协议作品");
+	expect(
+		DecisionProposalBatchSchema.safeParse({ decisions: [proposal(source)] }).success,
+	).toBeTrue();
+	const legacy = DecisionProposalBatchSchema.safeParse({
+		decisions: [
+			{
+				sourceUnitId: source.id,
+				confidence: "high",
+				citations: [{ unitId: source.id, field: "localization_title", excerpt: "协议作品" }],
+				note: null,
+				disposition: "keep",
+				reason: "distinct_work",
+				basis: [{ code: "booklike_title", citationIndexes: [0] }],
+			},
+		],
+	});
+	expect(legacy.success).toBeFalse();
+});
 
 function report(runId: string, decisionCount: number): DecisionQualityReport {
 	return {
@@ -192,7 +243,7 @@ test("proposal compilation owns immutable envelope fields and rejects incomplete
 	const runId = `proposal-${Date.now()}`;
 	const directory = runDirectory(runId);
 	try {
-		const config = await initializeRun({
+		const config = await initializeWorkerRun({
 			runId,
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
@@ -207,6 +258,16 @@ test("proposal compilation owns immutable envelope fields and rejects incomplete
 			promptRevision: LunaPromptRevision,
 		});
 		expect(decision?.packetId).toBe(packet.packetId);
+		expect(decision?.citations).toEqual([
+			{ unitId: source.id, field: "localization_title", excerpt: "完整作品" },
+			{
+				unitId: source.id,
+				field: "localization_summary",
+				excerpt: "一部具有完整人物与情节设定的小说。",
+			},
+		]);
+		if (decision?.disposition === "keep")
+			expect(decision.basis.map(({ citationIndexes }) => citationIndexes)).toEqual([[0], [1]]);
 		expect(() => compileDecisionProposals(config, [item], [])).toThrow("omitted assigned source");
 		expect(() =>
 			compileDecisionProposals(config, [item], [proposal(source), proposal(source)]),
@@ -216,11 +277,186 @@ test("proposal compilation owns immutable envelope fields and rejects incomplete
 	}
 });
 
+test("proposal compilation deduplicates claim-local citations without losing linkage", async () => {
+	const runId = `proposal-deduplicate-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "相同作品");
+		const target = sourceBook(randomUUID(), "相同作品");
+		const packet = buildReviewPacket(config, 0, "相同作品", [source], [target]);
+		const titleCitations = [source, target].map((book) => ({
+			unitId: book.id,
+			field: "localization_title" as const,
+			excerpt: "相同作品",
+		}));
+		const summaryCitations = [source, target].map((book) => ({
+			unitId: book.id,
+			field: "localization_summary" as const,
+			excerpt: "一部具有完整人物与情节设定的小说。",
+		}));
+		const repeatedTitleCitation = titleCitations[0];
+		if (!repeatedTitleCitation) throw new Error("Fixture title citation is missing");
+		const mergeProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: target.id,
+			basis: [
+				{ code: "same_title", citations: [...titleCitations, repeatedTitleCitation] },
+				{ code: "title_variant_same_work", citations: titleCitations },
+				{ code: "same_synopsis", citations: summaryCitations },
+			],
+		};
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[mergeProposal],
+		);
+		expect(decision?.citations).toHaveLength(4);
+		if (decision?.disposition === "merge")
+			expect(decision.basis.map(({ citationIndexes }) => citationIndexes)).toEqual([
+				[0, 1],
+				[0, 1],
+				[2, 3],
+			]);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("proposal compilation links review uncertainty citations", async () => {
+	const runId = `proposal-review-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "待核作品");
+		const packet = buildReviewPacket(config, 0, "待核作品", [source], []);
+		const reviewProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "low",
+			note: null,
+			disposition: "review",
+			reason: "insufficient_evidence",
+			uncertainties: [
+				{
+					kind: "correction_not_proven",
+					citations: [
+						{
+							unitId: source.id,
+							field: "localization_title",
+							excerpt: "待核作品",
+						},
+					],
+					relatedUnitIds: [],
+				},
+			],
+		};
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[reviewProposal],
+		);
+		expect(decision?.citations).toEqual([
+			{ unitId: source.id, field: "localization_title", excerpt: "待核作品" },
+		]);
+		if (decision?.disposition === "review")
+			expect(decision.uncertainties[0]?.citationIndexes).toEqual([0]);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("coordinator gives semantic validation feedback to a retry", async () => {
+	const runId = `work-feedback-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "反馈作品");
+		const packet = buildReviewPacket(config, 0, "反馈作品", [source], []);
+		const item = { packet, undecidedSourceUnitIds: [source.id] };
+		const validProposal = proposal(source);
+		if (validProposal.disposition !== "keep") throw new Error("Fixture proposal must be keep");
+		const synopsisBasis = validProposal.basis[1];
+		if (!synopsisBasis) throw new Error("Fixture synopsis basis is missing");
+		let attempts = 0;
+		let nextCalls = 0;
+		let recorded = 0;
+		const result = await runConcurrentReconciliation(config, {
+			concurrency: 1,
+			packetsPerWorker: 1,
+			progressEvery: 1,
+			dependencies: {
+				worker: {
+					async decide(_batch, options) {
+						attempts += 1;
+						if (attempts === 1) {
+							expect(options?.feedback).toBeUndefined();
+							return [
+								{
+									...validProposal,
+									basis: [
+										{
+											code: "booklike_title",
+											citations: [
+												{
+													unitId: source.id,
+													field: "localization_summary",
+													excerpt: "一部具有完整人物与情节设定的小说。",
+												},
+											],
+										},
+										synopsisBasis,
+									],
+								},
+							];
+						}
+						expect(options?.feedback).toBe("basis_invalid");
+						return [validProposal];
+					},
+				},
+				next: async () => (nextCalls++ === 0 ? [item] : []),
+				record: async (_config, decisions) => {
+					recorded += decisions.length;
+					return { recorded: decisions.length };
+				},
+				status: async () => ({
+					packetCount: 1,
+					sourceCount: 1,
+					decisionCount: recorded,
+					remainingCount: 1 - recorded,
+					onlineComplete: nextCalls >= 2,
+				}),
+				audit: async () => report(runId, recorded),
+			},
+		});
+		expect(attempts).toBe(2);
+		expect(result.workerRetries).toBe(1);
+		expect(recorded).toBe(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("coordinator bounds concurrency, preserves assignment order, and retries worker failure", async () => {
 	const runId = `work-${Date.now()}`;
 	const directory = runDirectory(runId);
 	try {
-		const config = await initializeRun({
+		const config = await initializeWorkerRun({
 			runId,
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
@@ -289,11 +525,37 @@ test("coordinator bounds concurrency, preserves assignment order, and retries wo
 	}
 });
 
+test("coordinator rejects a run without the current worker protocol before capture", async () => {
+	const runId = `work-unpinned-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		let nextCalled = false;
+		await expect(
+			runConcurrentReconciliation(config, {
+				dependencies: {
+					next: async () => {
+						nextCalled = true;
+						return [];
+					},
+				},
+			}),
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v2");
+		expect(nextCalled).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("orchestration lock rejects a second coordinator", async () => {
 	const runId = `work-lock-${Date.now()}`;
 	const directory = runDirectory(runId);
 	try {
-		const config = await initializeRun({
+		const config = await initializeWorkerRun({
 			runId,
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
@@ -311,7 +573,7 @@ test("failed worker drains in-flight work without recording and releases the coo
 	const runId = `work-failure-${Date.now()}`;
 	const directory = runDirectory(runId);
 	try {
-		const config = await initializeRun({
+		const config = await initializeWorkerRun({
 			runId,
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
@@ -358,6 +620,10 @@ test("failed worker drains in-flight work without recording and releases the coo
 		expect(drained).toBeTrue();
 		expect(recorded).toBeFalse();
 		expect(await pathExists(join(directory, ".work", "orchestrator.lock"))).toBeFalse();
+		const events = await Bun.file(join(directory, "events.jsonl")).text();
+		expect(events).toContain('"event":"work.failed"');
+		expect(events).toContain('"failureCode":"worker_attempts_exhausted"');
+		expect(events).not.toContain("fixture failure");
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -369,7 +635,7 @@ test.each(["usage_allowance", "authentication"] as const)(
 		const runId = `work-stop-${category.replaceAll("_", "-")}-${Date.now()}`;
 		const directory = runDirectory(runId);
 		try {
-			const config = await initializeRun({
+			const config = await initializeWorkerRun({
 				runId,
 				rezicsRef: "v1.7.0",
 				cutoff: "2026-09-02T16:00:00.000Z",
@@ -419,7 +685,7 @@ test("default 32-by-2 workers persist a 64-source part and odd tail then resume 
 	const runId = `work-defaults-${randomUUID()}`;
 	const directory = runDirectory(runId);
 	try {
-		const config = await initializeRun({
+		const config = await initializeWorkerRun({
 			runId,
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",

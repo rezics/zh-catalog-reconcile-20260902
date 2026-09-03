@@ -139,6 +139,25 @@ export const DecisionPolicyRevisionSchema = z.enum([
 export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema>;
 export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
+export const LunaWorkerModel = "gpt-5.6-luna" as const;
+export const LunaWorkerPromptRevision = "full-online-luna-v2" as const;
+export const LunaProposalProtocol = "claim-local-citations-v1" as const;
+export const WorkerProtocolSchema = z
+	.object({
+		kind: z.literal("codex"),
+		model: z.literal(LunaWorkerModel),
+		promptRevision: z.literal(LunaWorkerPromptRevision),
+		proposalProtocol: z.literal(LunaProposalProtocol),
+	})
+	.strict();
+export type WorkerProtocol = z.infer<typeof WorkerProtocolSchema>;
+export const CurrentLunaWorkerProtocol: WorkerProtocol = {
+	kind: "codex",
+	model: LunaWorkerModel,
+	promptRevision: LunaWorkerPromptRevision,
+	proposalProtocol: LunaProposalProtocol,
+};
+
 export const SourceStartSchema = z
 	.object({
 		fromRunId: RunIdSchema,
@@ -169,6 +188,7 @@ export const RunConfigSchema = z
 		evidenceMode: z.literal("online-batched"),
 		applyState: z.literal("locked"),
 		decisionPolicyRevision: DecisionPolicyRevisionSchema.default("legacy-v1"),
+		workerProtocol: WorkerProtocolSchema.nullable().default(null),
 		sourceStart: SourceStartSchema.nullable().default(null),
 		onlineBatchSize: z.int().min(1).max(100),
 		maxCandidatesPerPacket: z.int().min(2).max(50),
@@ -565,9 +585,25 @@ export type SourceDecision = z.infer<typeof SourceDecisionSchema>;
 const DecisionProposalBaseFields = {
 	sourceUnitId: UuidSchema,
 	confidence: DecisionConfidenceSchema,
-	citations: z.array(DecisionEvidenceCitationSchema).min(1).max(20),
 	note: z.string().trim().min(8).max(240).nullable(),
 } as const;
+
+export const DecisionProposalBasisSchema = z
+	.object({
+		code: DecisionBasisCodeSchema,
+		citations: z.array(DecisionEvidenceCitationSchema).min(1).max(6),
+	})
+	.strict();
+export type DecisionProposalBasis = z.infer<typeof DecisionProposalBasisSchema>;
+
+export const DecisionProposalUncertaintySchema = z
+	.object({
+		kind: DecisionUncertaintyKindSchema,
+		citations: z.array(DecisionEvidenceCitationSchema).min(1).max(6),
+		relatedUnitIds: z.array(UuidSchema).max(20),
+	})
+	.strict();
+export type DecisionProposalUncertainty = z.infer<typeof DecisionProposalUncertaintySchema>;
 
 const [
 	textPatch,
@@ -598,7 +634,7 @@ export const DecisionProposalSchema = z
 				...DecisionProposalBaseFields,
 				disposition: z.literal("keep"),
 				reason: z.literal("distinct_work"),
-				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				basis: z.array(DecisionProposalBasisSchema).min(1).max(8),
 			})
 			.strict(),
 		z
@@ -606,7 +642,7 @@ export const DecisionProposalSchema = z
 				...DecisionProposalBaseFields,
 				disposition: z.literal("merge"),
 				reason: z.literal("duplicate_identity"),
-				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				basis: z.array(DecisionProposalBasisSchema).min(1).max(8),
 				targetUnitId: UuidSchema,
 			})
 			.strict(),
@@ -622,7 +658,7 @@ export const DecisionProposalSchema = z
 					"placeholder",
 					"other",
 				]),
-				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				basis: z.array(DecisionProposalBasisSchema).min(1).max(8),
 			})
 			.strict(),
 		z
@@ -630,7 +666,7 @@ export const DecisionProposalSchema = z
 				...DecisionProposalBaseFields,
 				disposition: z.literal("revise"),
 				reason: z.enum(["wrong_attribution", "wrong_metadata"]),
-				basis: z.array(DecisionBasisSchema).min(1).max(8),
+				basis: z.array(DecisionProposalBasisSchema).min(1).max(8),
 				patches: z.array(ProposalRevisionPatchSchema).min(1).max(20),
 			})
 			.strict(),
@@ -639,7 +675,7 @@ export const DecisionProposalSchema = z
 				...DecisionProposalBaseFields,
 				disposition: z.literal("review"),
 				reason: z.enum(["insufficient_evidence", "other"]),
-				uncertainties: z.array(DecisionUncertaintySchema).min(1).max(10),
+				uncertainties: z.array(DecisionProposalUncertaintySchema).min(1).max(10),
 			})
 			.strict(),
 	])

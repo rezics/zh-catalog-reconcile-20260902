@@ -45,8 +45,9 @@ be resumed or planned.
 
 The `work` command is the full-corpus inference path. One coordinator owns production capture and
 recording while bounded ephemeral Codex workers run `gpt-5.6-luna` concurrently. Workers return
-typed proposals only; the coordinator supplies packet identity and actor fields, validates every
-proposal, and records the part. Total work is not count-limited.
+typed proposals with citations nested in their basis or uncertainty; the coordinator supplies
+packet identity and actor fields, derives the persisted citation indexes, validates every proposal,
+and records the part. Total work is not count-limited.
 
 ## Repository roles
 
@@ -82,13 +83,15 @@ evidence remain in the predecessor run.
 Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
 
 ```powershell
-bun run reconcile work --run full-online-luna-20260904 --concurrency 32 --packets-per-worker 2
+bun run reconcile init --run full-online-luna-v2-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v2
+bun run reconcile work --run full-online-luna-v2-20260904 --concurrency 32 --packets-per-worker 2
 ```
 
 Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no
 `--target` or count limit on `work`; concurrency is bounded independently from total work. Luna
 workers explicitly use ChatGPT authentication, standard (non-Fast) service, medium reasoning,
-and no tools; they do not inherit the operator's model, Fast, plugin, or MCP configuration.
+and no tools; they do not inherit the operator's model, Fast, plugin, or MCP configuration. `work`
+fails before capture when the run is not pinned to the current worker protocol.
 
 New runs capture 64 sources per database page, enough for 32 concurrent two-packet requests.
 Set `init --online-batch-size N` (1–100) to choose a different persisted page size. Existing runs

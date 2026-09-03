@@ -54,7 +54,8 @@ secret profile defaults to monitoring. Use runtime only when the operator alread
 and doctor proves both session-default and per-transaction read-only behavior.
 
 For a new run, use a new ID and fixed creation cutoff. Never reinitialize or delete a run.
-New full runs use `init --online-batch-size 64`; old runs keep their persisted page size. After
+New full runs use `init --online-batch-size 64 --worker-protocol full-online-luna-v2`; old runs
+keep their persisted page size. After
 doctor passes, use `probe --run <run-id>` to inspect one read-only page before full execution.
 It does not persist evidence, advance checkpoints, or invoke a model. Investigate broad scans,
 spills, and timeouts rather than weakening its checks. On Linux, use the reconciliation checkout
@@ -140,6 +141,8 @@ question-shaped title is not a query merely because it contains punctuation. Res
 command after an operator interruption; do not resume a run whose decisions use another model or
 prompt revision. Workers use ChatGPT login with standard (non-Fast) service and never redeem an
 account reset. Exhausted allowance is a resumable stop requiring operator action.
+`work` rejects a run that is not pinned to the current worker protocol before it captures or
+decides another packet.
 
 Continue until status reports `onlineComplete: true`, zero remaining packets, and full decision
 coverage. Require `audit` to report `passed`, then run:

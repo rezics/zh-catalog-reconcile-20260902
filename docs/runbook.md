@@ -99,7 +99,7 @@ For a complete run, prefer the single-coordinator concurrent inference command:
 
 ```powershell
 bun run reconcile work `
-  --run full-online-luna-20260904 `
+  --run full-online-luna-v2-20260904 `
   --concurrency 32 `
   --packets-per-worker 2 `
   --progress-every 1000
@@ -112,6 +112,9 @@ then run the same command to resume. Never use a run containing decisions from a
 or prompt revision, and never use `--after-run` to skip an untrusted decision range. Workers force
 ChatGPT login, standard (non-Fast) service, medium reasoning, and a tool-free isolated Codex
 configuration. They never redeem a usage reset; an exhausted allowance is a resumable stop.
+The `full-online-luna-v2` worker protocol places citations inside each basis or uncertainty; the
+coordinator alone derives the citation indexes stored in final decisions and supplies bounded
+validation feedback on a retry.
 
 ## Linux full run
 
@@ -125,14 +128,15 @@ After repository checks and `doctor` pass, initialize a fresh replacement run fr
 
 ```bash
 bun run reconcile init \
-  --run full-online-luna-20260904 \
+  --run full-online-luna-v2-20260904 \
   --rezics-ref v1.7.0 \
   --cutoff 2026-09-02T16:00:00.000Z \
-  --online-batch-size 64
-bun run reconcile probe --run full-online-luna-20260904
-bun run reconcile inventory --run full-online-luna-20260904
+  --online-batch-size 64 \
+  --worker-protocol full-online-luna-v2
+bun run reconcile probe --run full-online-luna-v2-20260904
+bun run reconcile inventory --run full-online-luna-v2-20260904
 bun run reconcile work \
-  --run full-online-luna-20260904 \
+  --run full-online-luna-v2-20260904 \
   --concurrency 32 \
   --packets-per-worker 2 \
   --progress-every 100

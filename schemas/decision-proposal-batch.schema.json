@@ -24,51 +24,6 @@
                   "low"
                 ]
               },
-              "citations": {
-                "minItems": 1,
-                "maxItems": 20,
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unitId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "field": {
-                      "type": "string",
-                      "enum": [
-                        "localization_title",
-                        "localization_summary",
-                        "localization_description",
-                        "alias",
-                        "attribution",
-                        "book_release_status",
-                        "book_isbn13",
-                        "book_publication_date",
-                        "book_page_count",
-                        "book_word_count",
-                        "unit_created_at",
-                        "unit_updated_at",
-                        "localization_languages",
-                        "suspicious_signal"
-                      ]
-                    },
-                    "excerpt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 240
-                    }
-                  },
-                  "required": [
-                    "unitId",
-                    "field",
-                    "excerpt"
-                  ],
-                  "additionalProperties": false
-                }
-              },
               "note": {
                 "anyOf": [
                   {
@@ -120,20 +75,55 @@
                         "attribution_correction_supported"
                       ]
                     },
-                    "citationIndexes": {
+                    "citations": {
                       "minItems": 1,
                       "maxItems": 6,
                       "type": "array",
                       "items": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 19
+                        "type": "object",
+                        "properties": {
+                          "unitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "localization_title",
+                              "localization_summary",
+                              "localization_description",
+                              "alias",
+                              "attribution",
+                              "book_release_status",
+                              "book_isbn13",
+                              "book_publication_date",
+                              "book_page_count",
+                              "book_word_count",
+                              "unit_created_at",
+                              "unit_updated_at",
+                              "localization_languages",
+                              "suspicious_signal"
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "unitId",
+                          "field",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
                   "required": [
                     "code",
-                    "citationIndexes"
+                    "citations"
                   ],
                   "additionalProperties": false
                 }
@@ -142,7 +132,6 @@
             "required": [
               "sourceUnitId",
               "confidence",
-              "citations",
               "note",
               "disposition",
               "reason",
@@ -165,51 +154,6 @@
                   "medium",
                   "low"
                 ]
-              },
-              "citations": {
-                "minItems": 1,
-                "maxItems": 20,
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unitId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "field": {
-                      "type": "string",
-                      "enum": [
-                        "localization_title",
-                        "localization_summary",
-                        "localization_description",
-                        "alias",
-                        "attribution",
-                        "book_release_status",
-                        "book_isbn13",
-                        "book_publication_date",
-                        "book_page_count",
-                        "book_word_count",
-                        "unit_created_at",
-                        "unit_updated_at",
-                        "localization_languages",
-                        "suspicious_signal"
-                      ]
-                    },
-                    "excerpt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 240
-                    }
-                  },
-                  "required": [
-                    "unitId",
-                    "field",
-                    "excerpt"
-                  ],
-                  "additionalProperties": false
-                }
               },
               "note": {
                 "anyOf": [
@@ -262,20 +206,55 @@
                         "attribution_correction_supported"
                       ]
                     },
-                    "citationIndexes": {
+                    "citations": {
                       "minItems": 1,
                       "maxItems": 6,
                       "type": "array",
                       "items": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 19
+                        "type": "object",
+                        "properties": {
+                          "unitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "localization_title",
+                              "localization_summary",
+                              "localization_description",
+                              "alias",
+                              "attribution",
+                              "book_release_status",
+                              "book_isbn13",
+                              "book_publication_date",
+                              "book_page_count",
+                              "book_word_count",
+                              "unit_created_at",
+                              "unit_updated_at",
+                              "localization_languages",
+                              "suspicious_signal"
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "unitId",
+                          "field",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
                   "required": [
                     "code",
-                    "citationIndexes"
+                    "citations"
                   ],
                   "additionalProperties": false
                 }
@@ -289,7 +268,6 @@
             "required": [
               "sourceUnitId",
               "confidence",
-              "citations",
               "note",
               "disposition",
               "reason",
@@ -313,51 +291,6 @@
                   "medium",
                   "low"
                 ]
-              },
-              "citations": {
-                "minItems": 1,
-                "maxItems": 20,
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unitId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "field": {
-                      "type": "string",
-                      "enum": [
-                        "localization_title",
-                        "localization_summary",
-                        "localization_description",
-                        "alias",
-                        "attribution",
-                        "book_release_status",
-                        "book_isbn13",
-                        "book_publication_date",
-                        "book_page_count",
-                        "book_word_count",
-                        "unit_created_at",
-                        "unit_updated_at",
-                        "localization_languages",
-                        "suspicious_signal"
-                      ]
-                    },
-                    "excerpt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 240
-                    }
-                  },
-                  "required": [
-                    "unitId",
-                    "field",
-                    "excerpt"
-                  ],
-                  "additionalProperties": false
-                }
               },
               "note": {
                 "anyOf": [
@@ -417,20 +350,55 @@
                         "attribution_correction_supported"
                       ]
                     },
-                    "citationIndexes": {
+                    "citations": {
                       "minItems": 1,
                       "maxItems": 6,
                       "type": "array",
                       "items": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 19
+                        "type": "object",
+                        "properties": {
+                          "unitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "localization_title",
+                              "localization_summary",
+                              "localization_description",
+                              "alias",
+                              "attribution",
+                              "book_release_status",
+                              "book_isbn13",
+                              "book_publication_date",
+                              "book_page_count",
+                              "book_word_count",
+                              "unit_created_at",
+                              "unit_updated_at",
+                              "localization_languages",
+                              "suspicious_signal"
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "unitId",
+                          "field",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
                   "required": [
                     "code",
-                    "citationIndexes"
+                    "citations"
                   ],
                   "additionalProperties": false
                 }
@@ -439,7 +407,6 @@
             "required": [
               "sourceUnitId",
               "confidence",
-              "citations",
               "note",
               "disposition",
               "reason",
@@ -462,51 +429,6 @@
                   "medium",
                   "low"
                 ]
-              },
-              "citations": {
-                "minItems": 1,
-                "maxItems": 20,
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unitId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "field": {
-                      "type": "string",
-                      "enum": [
-                        "localization_title",
-                        "localization_summary",
-                        "localization_description",
-                        "alias",
-                        "attribution",
-                        "book_release_status",
-                        "book_isbn13",
-                        "book_publication_date",
-                        "book_page_count",
-                        "book_word_count",
-                        "unit_created_at",
-                        "unit_updated_at",
-                        "localization_languages",
-                        "suspicious_signal"
-                      ]
-                    },
-                    "excerpt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 240
-                    }
-                  },
-                  "required": [
-                    "unitId",
-                    "field",
-                    "excerpt"
-                  ],
-                  "additionalProperties": false
-                }
               },
               "note": {
                 "anyOf": [
@@ -562,20 +484,55 @@
                         "attribution_correction_supported"
                       ]
                     },
-                    "citationIndexes": {
+                    "citations": {
                       "minItems": 1,
                       "maxItems": 6,
                       "type": "array",
                       "items": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 19
+                        "type": "object",
+                        "properties": {
+                          "unitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "localization_title",
+                              "localization_summary",
+                              "localization_description",
+                              "alias",
+                              "attribution",
+                              "book_release_status",
+                              "book_isbn13",
+                              "book_publication_date",
+                              "book_page_count",
+                              "book_word_count",
+                              "unit_created_at",
+                              "unit_updated_at",
+                              "localization_languages",
+                              "suspicious_signal"
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "unitId",
+                          "field",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
                   "required": [
                     "code",
-                    "citationIndexes"
+                    "citations"
                   ],
                   "additionalProperties": false
                 }
@@ -894,7 +851,6 @@
             "required": [
               "sourceUnitId",
               "confidence",
-              "citations",
               "note",
               "disposition",
               "reason",
@@ -918,51 +874,6 @@
                   "medium",
                   "low"
                 ]
-              },
-              "citations": {
-                "minItems": 1,
-                "maxItems": 20,
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unitId": {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                    },
-                    "field": {
-                      "type": "string",
-                      "enum": [
-                        "localization_title",
-                        "localization_summary",
-                        "localization_description",
-                        "alias",
-                        "attribution",
-                        "book_release_status",
-                        "book_isbn13",
-                        "book_publication_date",
-                        "book_page_count",
-                        "book_word_count",
-                        "unit_created_at",
-                        "unit_updated_at",
-                        "localization_languages",
-                        "suspicious_signal"
-                      ]
-                    },
-                    "excerpt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 240
-                    }
-                  },
-                  "required": [
-                    "unitId",
-                    "field",
-                    "excerpt"
-                  ],
-                  "additionalProperties": false
-                }
               },
               "note": {
                 "anyOf": [
@@ -1005,14 +916,49 @@
                         "other"
                       ]
                     },
-                    "citationIndexes": {
+                    "citations": {
                       "minItems": 1,
                       "maxItems": 6,
                       "type": "array",
                       "items": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 19
+                        "type": "object",
+                        "properties": {
+                          "unitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "localization_title",
+                              "localization_summary",
+                              "localization_description",
+                              "alias",
+                              "attribution",
+                              "book_release_status",
+                              "book_isbn13",
+                              "book_publication_date",
+                              "book_page_count",
+                              "book_word_count",
+                              "unit_created_at",
+                              "unit_updated_at",
+                              "localization_languages",
+                              "suspicious_signal"
+                            ]
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "required": [
+                          "unitId",
+                          "field",
+                          "excerpt"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "relatedUnitIds": {
@@ -1027,7 +973,7 @@
                   },
                   "required": [
                     "kind",
-                    "citationIndexes",
+                    "citations",
                     "relatedUnitIds"
                   ],
                   "additionalProperties": false
@@ -1037,7 +983,6 @@
             "required": [
               "sourceUnitId",
               "confidence",
-              "citations",
               "note",
               "disposition",
               "reason",

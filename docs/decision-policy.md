@@ -96,6 +96,9 @@ role and field type required by that code, and every citation must be used. In p
 - `review` uses typed `uncertainties` linked to source and related-candidate citations instead of
   basis entries.
 
+A target title explicitly states a variant when it contains the cited source title; synopsis text
+must likewise contain the alternate title rather than merely describe a similar story.
+
 A revision patch must link evidence for the changed field or a stored identity excerpt containing
 the replacement value. A `non_book_status_unclear` review may cite source identity evidence that
 shows why a query-like title cannot safely determine Book status.

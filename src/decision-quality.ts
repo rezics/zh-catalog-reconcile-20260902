@@ -462,7 +462,8 @@ function validateBasis(
 					.filter(
 						({ unitId, field }) =>
 							unitId === decision.targetUnitId &&
-							(field === "alias" ||
+							(field === "localization_title" ||
+								field === "alias" ||
 								field === "localization_summary" ||
 								field === "localization_description"),
 					)

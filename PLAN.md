@@ -258,8 +258,9 @@ corpus; the coordinator reports the original failure after all other active work
 For citation-only model transcription failures, the coordinator may restore the source's unique
 equal-length stored title selected by a keep proposal's `booklike_title` claim and propagate that
 exact substitution within the same proposal; other title citations require a unique one-character
-near match. Every restored citation must still pass the ordinary validator. Stored synopsis text
+insertion, deletion, or substitution near match. Every restored citation must still pass the ordinary validator. Stored synopsis text
 may support `title_variant_same_work` only when it explicitly states the alternate title.
+The target title itself may prove a title variant when it contains the cited source title.
 Citation matching ignores formatting whitespace but not other content. When a model transcribes a
 merge target outside the packet, the coordinator may restore it only when all non-source basis
 citations identify exactly one packet candidate; the repaired proposal then passes normal binding.

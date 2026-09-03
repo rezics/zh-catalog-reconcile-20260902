@@ -346,6 +346,45 @@ test("proposal compilation restores a unique equal-length full-title transformat
 	}
 });
 
+test("proposal compilation restores a unique one-character title omission", async () => {
+	const runId = `proposal-title-omission-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "重生王牌妻:偏执薄爷,放肆撩慕晚晚薄司寒");
+		const packet = buildReviewPacket(config, 0, "重生王牌妻", [source], []);
+		const proposalWithOmission = proposal(source);
+		if (proposalWithOmission.disposition !== "keep")
+			throw new Error("Fixture proposal must be keep");
+		const titleBasis = proposalWithOmission.basis.find(({ code }) => code === "booklike_title");
+		if (!titleBasis) throw new Error("Fixture title basis is missing");
+		titleBasis.citations = [
+			{
+				unitId: source.id,
+				field: "localization_title",
+				excerpt: "重生王牌妻:偏执薄爷,放肆慕晚晚薄司寒",
+			},
+		];
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[proposalWithOmission],
+		);
+		expect(
+			decision?.citations.some(
+				({ field, excerpt }) =>
+					field === "localization_title" && excerpt === "重生王牌妻:偏执薄爷,放肆撩慕晚晚薄司寒",
+			),
+		).toBeTrue();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("citation matching ignores stored formatting whitespace", async () => {
 	const runId = `proposal-citation-whitespace-${Date.now()}`;
 	const directory = runDirectory(runId);
@@ -811,6 +850,51 @@ test("title variants may cite stored synopsis text that explicitly states the al
 							unitId: target.id,
 							field: "localization_summary",
 							excerpt: "小说别名：原名",
+						},
+					],
+				},
+			],
+		};
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[mergeProposal],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a target title that contains the source title explicitly proves a title variant", async () => {
+	const runId = `proposal-title-variant-title-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "圣虚");
+		const target = sourceBook(randomUUID(), "圣墟(圣虚)");
+		const packet = buildReviewPacket(config, 0, "圣虚", [source], [target]);
+		const mergeProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: target.id,
+			basis: [
+				{
+					code: "title_variant_same_work",
+					citations: [
+						{ unitId: source.id, field: "localization_title", excerpt: "圣虚" },
+						{
+							unitId: target.id,
+							field: "localization_title",
+							excerpt: "圣墟(圣虚)",
 						},
 					],
 				},

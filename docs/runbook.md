@@ -120,10 +120,11 @@ coordinator alone derives the citation indexes stored in final decisions. The wo
 deterministic validator share one basis claim contract for allowed fields and required Unit roles.
 For a keep proposal, the coordinator can restore only the unique equal-length source title selected
 by `booklike_title` and propagate that exact substitution within the proposal. Other title repairs
-require a unique one-character near match. Every repaired proposal still passes the normal validator.
+require a unique one-character insertion, deletion, or substitution near match. Every repaired proposal still passes the normal validator.
 The validator accepts a matching synopsis excerpt of at least 64 normalized characters as
 duplicate proof and permits a
 non-Book uncertainty to cite contradictory source Book evidence.
+A target title can prove an explicit title variant when it contains the cited source title.
 It ignores formatting whitespace in citation excerpts and restores an out-of-packet merge target
 only from exactly one non-source candidate cited by the proposal.
 For `same_synopsis`, it may restore an excerpt of at least 64 normalized characters only to a

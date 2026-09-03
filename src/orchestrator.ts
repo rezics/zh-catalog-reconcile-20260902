@@ -126,14 +126,36 @@ function normalizedCitationText(value: string): string {
 function differsByOneCharacter(left: string, right: string): boolean {
 	const leftCharacters = [...left];
 	const rightCharacters = [...right];
-	if (leftCharacters.length !== rightCharacters.length || leftCharacters.length < 2) return false;
-	let differences = 0;
-	for (let index = 0; index < leftCharacters.length; index += 1) {
-		if (leftCharacters[index] === rightCharacters[index]) continue;
-		differences += 1;
-		if (differences > 1) return false;
+	if (
+		Math.min(leftCharacters.length, rightCharacters.length) < 2 ||
+		Math.abs(leftCharacters.length - rightCharacters.length) > 1
+	)
+		return false;
+	if (leftCharacters.length === rightCharacters.length) {
+		let differences = 0;
+		for (let index = 0; index < leftCharacters.length; index += 1) {
+			if (leftCharacters[index] === rightCharacters[index]) continue;
+			differences += 1;
+			if (differences > 1) return false;
+		}
+		return differences === 1;
 	}
-	return differences === 1;
+	const longer = leftCharacters.length > rightCharacters.length ? leftCharacters : rightCharacters;
+	const shorter = longer === leftCharacters ? rightCharacters : leftCharacters;
+	let longerIndex = 0;
+	let shorterIndex = 0;
+	let skipped = false;
+	while (longerIndex < longer.length && shorterIndex < shorter.length) {
+		if (longer[longerIndex] === shorter[shorterIndex]) {
+			longerIndex += 1;
+			shorterIndex += 1;
+			continue;
+		}
+		if (skipped) return false;
+		skipped = true;
+		longerIndex += 1;
+	}
+	return true;
 }
 
 function repairNearMissTitleCitation(

@@ -85,8 +85,8 @@ evidence remain in the predecessor run.
 Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
 
 ```powershell
-bun run reconcile init --run full-online-luna-v4-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v4
-bun run reconcile work --run full-online-luna-v4-20260904 --concurrency 32 --packets-per-worker 2 --max-attempts 5
+bun run reconcile init --run full-online-luna-v5-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 256 --worker-protocol full-online-luna-v5
+bun run reconcile work --run full-online-luna-v5-20260904 --concurrency 128 --packets-per-worker 4 --max-attempts 5
 ```
 
 Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no
@@ -95,10 +95,12 @@ workers explicitly use ChatGPT authentication, standard (non-Fast) service, medi
 and no tools; they do not inherit the operator's model, Fast, plugin, or MCP configuration. `work`
 fails before capture when the run is not pinned to the current worker protocol.
 
-New runs capture 64 sources per database page, enough for 32 concurrent two-packet requests.
-Set `init --online-batch-size N` (1–100) to choose a different persisted page size. Existing runs
-retain their original size; inference concurrency does not increase database concurrency above
-one. The [Linux runbook](./docs/runbook.md#linux-full-run) covers execution on a separate host.
+New runs default to 64 sources per database page; the current production run uses the proven
+256-source page. Set `init --online-batch-size N` (1–256) to choose a persisted page size. The full
+worker pipelines at most four parts, triages 20 packets per conservative request, sends fallback
+work to four-packet full decisions, and caps all model requests at 128. Existing runs retain their
+original size; database concurrency remains one. The [Linux runbook](./docs/runbook.md#linux-full-run)
+covers execution on a separate host.
 
 Database commands accept either `REZICS_DATABASE_SECRET_FILE` or a dedicated
 `REZICS_DATABASE_READONLY_URL`, never both. With the secret document, the runner can reach a

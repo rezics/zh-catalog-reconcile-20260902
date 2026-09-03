@@ -27,9 +27,11 @@ AI requests `next`
 ## Online instead of a local catalog copy
 
 The full-run `work` command preserves a single capture/write path and fans out only model
-inference. One coordinator reads a persisted packet part, splits it into bounded work items,
-runs ephemeral Luna processes concurrently, validates all returned proposals, and records the
-part through one writer. Workers cannot choose run IDs, packet hashes, timestamps, or actor
+inference. One coordinator pipelines at most four persisted packet parts, performs conservative
+20-source routine-keep triage, splits every fallback into four-packet work items, runs ephemeral
+Luna processes concurrently behind one 128-request semaphore, validates returned proposals per
+source, and records each completed part through one writer. Workers cannot choose run IDs, packet
+hashes, timestamps, or actor
 identity. Each worker runs with isolated Codex user configuration, ChatGPT-only authentication,
 standard (non-Fast) service, no project instructions, and disabled shell, browsing, app/plugin,
 and subagent tools, so it cannot inherit the operator's plugins, MCP servers, model, or Fast
@@ -38,7 +40,7 @@ setting.
 Workers attach each exact citation directly to the typed basis or uncertainty it supports. The
 coordinator deterministically deduplicates citations and assigns the zero-based indexes used by
 the persisted decision schema. Workers never manage a separate citation array, so an unlinked
-citation cannot cross the proposal boundary. The v3 prompt renders the same basis claim contract
+citation cannot cross the proposal boundary. The v5 full-decision prompt renders the same basis claim contract
 used by deterministic validation, including allowed fields and required source, target, or
 non-source-candidate roles. Validation failures are retried with a bounded typed category and
 issue code; the feedback never changes a disposition or substitutes deterministic catalog
@@ -120,15 +122,15 @@ coverage, idempotency, and action compilation; the model owns only bounded seman
 
 ## Scaling
 
-The local runner applies backpressure by fetching a new batch only after all persisted packets
-have decisions. At hundreds of millions of sources, partition the creation keyspace, run multiple
+The local runner applies backpressure with a four-part active window; capture can overlap model
+inference but never grows into a catalog snapshot. At hundreds of millions of sources, partition the creation keyspace, run multiple
 rate-limited workers, and replace repo-local packet parts with durable object storage. Do not turn
 the online design back into a complete local export to scale it.
 
-New runs default to 64 one-source packets per page and 32 concurrent requests carrying two
-packets each. Initialization accepts page sizes from 1 to 100; old runs retain their persisted
-size. Effective parallelism is at most `min(concurrency, ceil(pageSize / packetsPerWorker))`,
-with fewer requests on a tail page. Increasing worker concurrency without enough packets cannot
-add parallelism. Capture remains one short transaction at a time and is never multiplied by
-inference concurrency. Process memory, rate limits, capture latency, and part barriers still
-determine sustained throughput; configured parallelism is not a proportional-speedup guarantee.
+New runs default to 64 one-source packets per page; the current production run uses the probed
+256-source page. Initialization accepts page sizes from 1 to 256; old runs retain their persisted
+size. Triage uses at most 32 of the shared 128 request slots, full decisions use groups of four,
+and no more than four parts are active. Capture remains one short transaction at a time and is
+never multiplied by inference concurrency. Process memory, rate limits, capture latency, and tail
+requests still determine sustained throughput; configured parallelism is not a proportional
+speedup guarantee.

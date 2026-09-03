@@ -6,12 +6,13 @@ import {
 	CurrentLunaWorkerProtocol,
 	HistoricalLunaWorkerProtocolV2,
 	HistoricalLunaWorkerProtocolV3,
+	HistoricalLunaWorkerProtocolV4,
 	WorkerProtocolSchema,
 } from "../src/contracts.ts";
 import { loadRunConfig, pathExists, repositoryRoot, runDirectory } from "../src/io.ts";
 import { initializeRun } from "../src/run.ts";
 
-test.each([undefined, 1, 20, 64, 100])(
+test.each([undefined, 1, 20, 64, 100, 256])(
 	"initialization persists database page size %s",
 	async (size) => {
 		const runId = `run-batch-${randomUUID()}`;
@@ -31,7 +32,7 @@ test.each([undefined, 1, 20, 64, 100])(
 	},
 );
 
-test.each([0, -1, 1.5, 101, Number.NaN, Number.POSITIVE_INFINITY])(
+test.each([0, -1, 1.5, 257, Number.NaN, Number.POSITIVE_INFINITY])(
 	"initialization rejects invalid page size %s before creating a run",
 	async (size) => {
 		const runId = `invalid-batch-${randomUUID()}`;
@@ -49,7 +50,7 @@ test.each([0, -1, 1.5, 101, Number.NaN, Number.POSITIVE_INFINITY])(
 
 test.each([
 	{ args: ["--online-batch-size", "17"], valid: true },
-	{ args: ["--online-batch-size", "101"], valid: false },
+	{ args: ["--online-batch-size", "257"], valid: false },
 	{ args: ["--online-batch-size", "1.5"], valid: false },
 	{ args: ["--online-batch-szie", "64"], valid: false },
 ])("init CLI validates and persists the database batch option", async ({ args, valid }) => {
@@ -95,7 +96,7 @@ test("init CLI pins the requested full-run worker protocol", async () => {
 				"--cutoff",
 				"2026-09-02T16:00:00.000Z",
 				"--worker-protocol",
-				"full-online-luna-v4",
+				"full-online-luna-v5",
 			],
 			{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
 		);
@@ -118,32 +119,40 @@ test("historical v3 worker protocol remains readable", () => {
 	);
 });
 
-test.each(["full-online-luna-v1", "full-online-luna-v2", "full-online-luna-v3"])(
-	"init CLI rejects obsolete worker protocol %s before creating a run",
-	async (workerProtocol) => {
-		const runId = `cli-worker-obsolete-${randomUUID()}`;
-		try {
-			const child = Bun.spawn(
-				[
-					process.execPath,
-					"run",
-					"src/cli.ts",
-					"init",
-					"--run",
-					runId,
-					"--rezics-ref",
-					"v1.7.0",
-					"--cutoff",
-					"2026-09-02T16:00:00.000Z",
-					"--worker-protocol",
-					workerProtocol,
-				],
-				{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
-			);
-			expect(await child.exited).toBe(1);
-			expect(await pathExists(runDirectory(runId))).toBeFalse();
-		} finally {
-			await rm(runDirectory(runId), { recursive: true, force: true });
-		}
-	},
-);
+test("historical v4 worker protocol remains readable", () => {
+	expect(WorkerProtocolSchema.parse(HistoricalLunaWorkerProtocolV4)).toEqual(
+		HistoricalLunaWorkerProtocolV4,
+	);
+});
+
+test.each([
+	"full-online-luna-v1",
+	"full-online-luna-v2",
+	"full-online-luna-v3",
+	"full-online-luna-v4",
+])("init CLI rejects obsolete worker protocol %s before creating a run", async (workerProtocol) => {
+	const runId = `cli-worker-obsolete-${randomUUID()}`;
+	try {
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				"run",
+				"src/cli.ts",
+				"init",
+				"--run",
+				runId,
+				"--rezics-ref",
+				"v1.7.0",
+				"--cutoff",
+				"2026-09-02T16:00:00.000Z",
+				"--worker-protocol",
+				workerProtocol,
+			],
+			{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
+		);
+		expect(await child.exited).toBe(1);
+		expect(await pathExists(runDirectory(runId))).toBeFalse();
+	} finally {
+		await rm(runDirectory(runId), { recursive: true, force: true });
+	}
+});

@@ -262,8 +262,8 @@ export async function withOnlineCatalog<Result>(
 
 	return withReadOnlyDatabase(async (queryReadOnly) => {
 		const readEvidencePage: OnlineCatalogReader["readEvidencePage"] = async (input) => {
-			if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100)
-				throw new Error("Online source page limit must be between 1 and 100");
+			if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 256)
+				throw new Error("Online source page limit must be between 1 and 256");
 			if (
 				!Number.isSafeInteger(input.maxCandidates) ||
 				input.maxCandidates < 2 ||

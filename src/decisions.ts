@@ -146,12 +146,34 @@ async function decisionsForPart(config: RunConfig, part: number): Promise<Set<st
 	return loadExistingSourceIds(join(runDirectory(config.runId), "decisions", partFileName(part)));
 }
 
-async function decisionProgressStart(config: RunConfig): Promise<number> {
+export async function decisionProgressStart(config: RunConfig): Promise<number> {
 	const checkpointPath = join(runDirectory(config.runId), "decisions", "checkpoint.json");
 	if (!(await pathExists(checkpointPath))) return 0;
 	const checkpoint = await readJson(checkpointPath, DecisionProgressCheckpointSchema);
 	if (checkpoint.runId !== config.runId) throw new Error("Decision checkpoint run ID mismatch");
 	return checkpoint.completedThroughPart + 1;
+}
+
+export async function pendingPacketsForPart(
+	config: RunConfig,
+	part: number,
+): Promise<
+	readonly { readonly packet: ReviewPacket; readonly undecidedSourceUnitIds: readonly string[] }[]
+> {
+	const packetPath = join(runDirectory(config.runId), "packets", partFileName(part));
+	if (!(await pathExists(packetPath))) throw new Error(`Packet part does not exist: ${part}`);
+	const decided = await decisionsForPart(config, part);
+	const result: {
+		readonly packet: ReviewPacket;
+		readonly undecidedSourceUnitIds: readonly string[];
+	}[] = [];
+	for await (const packet of readJsonLines(packetPath, ReviewPacketSchema)) {
+		const undecidedSourceUnitIds = packet.sourceUnitIds.filter(
+			(sourceUnitId) => !decided.has(sourceUnitId),
+		);
+		if (undecidedSourceUnitIds.length > 0) result.push({ packet, undecidedSourceUnitIds });
+	}
+	return result;
 }
 
 async function markDecisionPartComplete(config: RunConfig, part: number): Promise<void> {

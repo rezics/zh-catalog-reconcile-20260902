@@ -15,6 +15,7 @@ import {
 	type DecisionQualityReport,
 	HistoricalLunaWorkerProtocolV2,
 	HistoricalLunaWorkerProtocolV3,
+	HistoricalLunaWorkerProtocolV4,
 	PacketCheckpointSchema,
 	SchemaVersion,
 	SourceDecisionSchema,
@@ -90,7 +91,7 @@ test("worker output schema uses the supported closed-object structured-output su
 });
 
 test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
-	expect(LunaPromptRevision).toBe("full-online-luna-v4");
+	expect(LunaPromptRevision).toBe("full-online-luna-v5");
 	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
 	expect(arguments_).toContain("--ignore-user-config");
 	expect(arguments_).toContain("fast_mode");
@@ -726,7 +727,7 @@ test("coordinator rejects a run without the current worker protocol before captu
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -754,7 +755,7 @@ test("coordinator keeps historical v2 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -782,7 +783,35 @@ test("coordinator keeps historical v3 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
+		expect(nextCalled).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("coordinator keeps historical v4 runs readable but refuses to resume them", async () => {
+	const runId = `work-historical-v4-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+			workerProtocol: HistoricalLunaWorkerProtocolV4,
+		});
+		expect(config.workerProtocol).toEqual(HistoricalLunaWorkerProtocolV4);
+		let nextCalled = false;
+		await expect(
+			runConcurrentReconciliation(config, {
+				dependencies: {
+					next: async () => {
+						nextCalled = true;
+						return [];
+					},
+				},
+			}),
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v5");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -922,7 +951,86 @@ test.each(["usage_allowance", "authentication"] as const)(
 	},
 );
 
-test("default 32-by-2 workers persist a 64-source part and odd tail then resume without duplication", async () => {
+test("pipeline triages routine keeps and sends only fallback sources to the full worker", async () => {
+	const runId = `work-pipeline-${randomUUID()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const sources = Array.from({ length: 4 }, (_, index) =>
+			sourceBook(randomUUID(), `流水作品${index}`),
+		).sort((left, right) => left.id.localeCompare(right.id));
+		const packets = sources.map((source) => buildReviewPacket(config, 0, source.id, [source], []));
+		await writeJsonLinesAtomic(join(directory, "packets", partFileName(0)), packets);
+		const lastSource = sources.at(-1);
+		if (!lastSource) throw new Error("Fixture source missing");
+		await writeJsonAtomic(
+			join(directory, "packets", "checkpoint.json"),
+			PacketCheckpointSchema.parse({
+				schemaVersion: SchemaVersion,
+				runId,
+				evidenceMode: "online-batched",
+				lastSourceCreatedAt: lastSource.createdAt,
+				lastSourceUnitId: lastSource.id,
+				sourceCount: 4,
+				packetCount: 4,
+				nextPart: 1,
+				complete: true,
+				updatedAt: nowIso(),
+			}),
+		);
+		const routineIds = new Set(sources.slice(0, 2).map(({ id }) => id));
+		let fullWorkerSources = 0;
+		const result = await runConcurrentReconciliation(config, {
+			usePipeline: true,
+			dependencies: {
+				triage: {
+					async decide(items) {
+						return items.flatMap(({ undecidedSourceUnitIds }) =>
+							undecidedSourceUnitIds.map((sourceUnitId) => ({
+								sourceUnitId,
+								routineKeep: routineIds.has(sourceUnitId),
+							})),
+						);
+					},
+				},
+				worker: {
+					async decide(items) {
+						fullWorkerSources += items.length;
+						return items.map(({ packet }) => {
+							const source = packet.candidates[0];
+							if (!source) throw new Error("Fixture source missing");
+							return proposal(source);
+						});
+					},
+				},
+			},
+		});
+		expect(result).toMatchObject({ decisionCount: 4, onlineComplete: true, workerRetries: 0 });
+		expect(fullWorkerSources).toBe(2);
+		const events = await Bun.file(join(directory, "events.jsonl")).text();
+		expect(events).toContain('"event":"triage.completed"');
+		expect(events).toContain('"routineKeeps":2');
+		expect(events).toContain('"fullWorkerSources":2');
+		const actorRevisions = new Map<string, string>();
+		for await (const decision of readJsonLines(
+			join(directory, "decisions", partFileName(0)),
+			SourceDecisionSchema,
+		))
+			actorRevisions.set(decision.sourceUnitId, decision.actor.promptRevision);
+		for (const source of sources)
+			expect(actorRevisions.get(source.id)).toBe(
+				routineIds.has(source.id) ? "full-online-luna-v5-triage" : "full-online-luna-v5",
+			);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("default 128-by-4 workers persist a 64-source part and odd tail then resume without duplication", async () => {
 	const runId = `work-defaults-${randomUUID()}`;
 	const directory = runDirectory(runId);
 	try {
@@ -978,8 +1086,8 @@ test("default 32-by-2 workers persist a 64-source part and odd tail then resume 
 			},
 		};
 		const result = await runConcurrentReconciliation(config, { dependencies: { worker } });
-		expect(maximumActive).toBe(32);
-		expect(batchSizes).toEqual([...Array.from({ length: 32 }, () => 2), 1]);
+		expect(maximumActive).toBe(16);
+		expect(batchSizes).toEqual([...Array.from({ length: 16 }, () => 4), 1]);
 		expect(result).toMatchObject({ decisionCount: 65, onlineComplete: true, workerRetries: 0 });
 		expect(result.audit.status).toBe("passed");
 		const recordedIds: string[] = [];
@@ -998,7 +1106,7 @@ test("default 32-by-2 workers persist a 64-source part and odd tail then resume 
 		).toMatchObject({ completedThroughPart: 1 });
 		const resumed = await runConcurrentReconciliation(config, { dependencies: { worker } });
 		expect(resumed.decisionCount).toBe(65);
-		expect(batchSizes).toHaveLength(33);
+		expect(batchSizes).toHaveLength(17);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

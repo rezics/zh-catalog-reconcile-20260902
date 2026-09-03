@@ -54,7 +54,7 @@ secret profile defaults to monitoring. Use runtime only when the operator alread
 and doctor proves both session-default and per-transaction read-only behavior.
 
 For a new run, use a new ID and fixed creation cutoff. Never reinitialize or delete a run.
-New full runs use `init --online-batch-size 64 --worker-protocol full-online-luna-v4`; old runs
+The current full run uses `init --online-batch-size 256 --worker-protocol full-online-luna-v5`; old runs
 keep their persisted page size. After
 doctor passes, use `probe --run <run-id>` to inspect one read-only page before full execution.
 It does not persist evidence, advance checkpoints, or invoke a model. Investigate broad scans,
@@ -77,7 +77,8 @@ transaction, and atomically persists the packet part. AI inference never runs in
 transaction.
 
 Do not run ad hoc SQL or create `snapshot/books.jsonl`. Do not preload the complete source or
-candidate catalog. Fetch another online page only by exhausting and recording the current packets.
+candidate catalog. The full-run coordinator may pipeline at most four packet parts; manual `next`
+still fetches another page only after exhausting and recording the current packets.
 
 ## Decide packets
 
@@ -132,11 +133,13 @@ For a fresh full-corpus Luna run, use one coordinator with bounded inference con
 set or simulate a durable decision target:
 
 ```powershell
-bun run reconcile work --run <run-id> --concurrency 32 --packets-per-worker 2
+bun run reconcile work --run <run-id> --concurrency 128 --packets-per-worker 4 --max-attempts 5
 ```
 
-The coordinator alone may call `next` and `record`. Ephemeral workers return typed semantic
-proposals and must not browse, access the database, or use deterministic disposition rules. A
+The coordinator alone may capture and record. Conservative 20-source Luna triage may emit only a
+routine-keep Boolean; the coordinator accepts it only for source-only packets with mechanically
+validated title-plus-corroboration citations. Every other item goes to an ephemeral full worker.
+Workers return typed semantic proposals and must not browse or access the database. A
 question-shaped title is not a query merely because it contains punctuation. Resume the same
 command after an operator interruption; do not resume a run whose decisions use another model or
 prompt revision. Workers use ChatGPT login with standard (non-Fast) service and never redeem an

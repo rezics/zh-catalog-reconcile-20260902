@@ -85,8 +85,8 @@ evidence remain in the predecessor run.
 Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
 
 ```powershell
-bun run reconcile init --run full-online-luna-v3-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v3
-bun run reconcile work --run full-online-luna-v3-20260904 --concurrency 32 --packets-per-worker 2 --max-attempts 5
+bun run reconcile init --run full-online-luna-v4-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v4
+bun run reconcile work --run full-online-luna-v4-20260904 --concurrency 32 --packets-per-worker 2 --max-attempts 5
 ```
 
 Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no

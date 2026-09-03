@@ -35,7 +35,7 @@ const RetryGuidance: Readonly<Record<DecisionWorkerFeedbackCode, string>> = {
 	decision_validation_invalid:
 		"Recheck the complete disposition contract and regenerate every decision in the batch.",
 	disposition_evidence_invalid:
-		"Keep, merge, soft-delete, and revise require their disposition-specific stored-evidence claims; do not change the disposition only to pass validation.",
+		"Keep, merge, soft-delete, and revise require their disposition-specific stored-evidence claims. Re-evaluate the semantic disposition only when the typed issue identifies contrary stored evidence; otherwise do not change it merely to pass validation.",
 	output_schema_invalid:
 		"Return only the current output-schema shape, including claim-local citations and no persisted envelope fields or citation indexes.",
 	uncertainty_invalid:
@@ -56,6 +56,8 @@ const RetryIssueGuidance: Readonly<Record<DecisionWorkerFeedbackIssue, string>> 
 	distinct_candidate_missing_source:
 		"For distinct_candidate_evidence, include at least one citation whose Unit ID equals sourceUnitId.",
 	output_schema_contract: "Return only the exact current structured-output shape.",
+	query_fragment_contrary_book_evidence:
+		"The source has stored Book-shaped corroboration, so title shape alone cannot support query_fragment soft-delete. Re-evaluate from the packet evidence. Use review with non_book_status_unclear when Book status remains unresolved; otherwise return the semantically supported disposition and citations.",
 	uncertainty_contract:
 		"Recheck the source citation and citations for every related candidate named by each uncertainty.",
 };

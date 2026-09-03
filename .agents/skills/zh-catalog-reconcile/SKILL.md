@@ -54,7 +54,7 @@ secret profile defaults to monitoring. Use runtime only when the operator alread
 and doctor proves both session-default and per-transaction read-only behavior.
 
 For a new run, use a new ID and fixed creation cutoff. Never reinitialize or delete a run.
-New full runs use `init --online-batch-size 64 --worker-protocol full-online-luna-v3`; old runs
+New full runs use `init --online-batch-size 64 --worker-protocol full-online-luna-v4`; old runs
 keep their persisted page size. After
 doctor passes, use `probe --run <run-id>` to inspect one read-only page before full execution.
 It does not persist evidence, advance checkpoints, or invoke a model. Investigate broad scans,

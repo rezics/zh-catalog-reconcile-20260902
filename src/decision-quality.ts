@@ -518,8 +518,10 @@ export function validateDecisionAgainstPacket(
 				localizations.some(({ title }) => Boolean(title?.trim())),
 		);
 		if ((hasSynopsis && hasAuthorship) || source?.details.isbn13)
-			dispositionEvidenceError(
-				"Query-fragment deletion conflicts with stored synopsis/authorship or identifier evidence; use semantic review, not title-shape deletion",
+			throw workerValidationError(
+				"Query-fragment deletion conflicts with stored synopsis/authorship or identifier evidence; re-evaluate the semantic disposition",
+				"disposition_evidence_invalid",
+				"query_fragment_contrary_book_evidence",
 			);
 	}
 

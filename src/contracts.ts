@@ -140,7 +140,7 @@ export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema
 export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
 export const LunaWorkerModel = "gpt-5.6-luna" as const;
-export const LunaWorkerPromptRevision = "full-online-luna-v3" as const;
+export const LunaWorkerPromptRevision = "full-online-luna-v4" as const;
 export const LunaProposalProtocol = "claim-local-citations-v2" as const;
 export const HistoricalLunaWorkerProtocolV2 = {
 	kind: "codex",
@@ -156,6 +156,20 @@ const HistoricalLunaWorkerProtocolV2Schema = z
 		proposalProtocol: z.literal(HistoricalLunaWorkerProtocolV2.proposalProtocol),
 	})
 	.strict();
+export const HistoricalLunaWorkerProtocolV3 = {
+	kind: "codex",
+	model: LunaWorkerModel,
+	promptRevision: "full-online-luna-v3",
+	proposalProtocol: LunaProposalProtocol,
+} as const;
+const HistoricalLunaWorkerProtocolV3Schema = z
+	.object({
+		kind: z.literal("codex"),
+		model: z.literal(LunaWorkerModel),
+		promptRevision: z.literal(HistoricalLunaWorkerProtocolV3.promptRevision),
+		proposalProtocol: z.literal(HistoricalLunaWorkerProtocolV3.proposalProtocol),
+	})
+	.strict();
 const CurrentLunaWorkerProtocolSchema = z
 	.object({
 		kind: z.literal("codex"),
@@ -166,6 +180,7 @@ const CurrentLunaWorkerProtocolSchema = z
 	.strict();
 export const WorkerProtocolSchema = z.union([
 	HistoricalLunaWorkerProtocolV2Schema,
+	HistoricalLunaWorkerProtocolV3Schema,
 	CurrentLunaWorkerProtocolSchema,
 ]);
 export type WorkerProtocol = z.infer<typeof WorkerProtocolSchema>;

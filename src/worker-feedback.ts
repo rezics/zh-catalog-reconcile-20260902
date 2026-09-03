@@ -16,6 +16,7 @@ export type DecisionWorkerFeedbackIssue =
 	| "distinct_candidate_missing_non_source_candidate"
 	| "distinct_candidate_missing_source"
 	| "output_schema_contract"
+	| "query_fragment_contrary_book_evidence"
 	| "uncertainty_contract";
 
 export type DecisionWorkerFeedback = {

@@ -13,9 +13,9 @@ This `PLAN.md` is the repository's single authoritative work plan. The repositor
 architecture, decision policy, decision template, and runbook are supporting contracts and
 procedures; they are not separate plans.
 
-The current replacement execution is `full-online-luna-v3-20260904`: a fresh run from the
+The current replacement execution is `full-online-luna-v4-20260904`: a fresh run from the
 beginning with REZICS reference `v1.7.0`, cutoff `2026-09-02T16:00:00.000Z`, page size 64,
-`evidence-claims-v3`, and the `full-online-luna-v3` worker protocol. It must use no source-start
+`evidence-claims-v3`, and the `full-online-luna-v4` worker protocol. It must use no source-start
 cursor and no `--after-run`. Initialize it only if that run ID does not already exist; otherwise,
 verify the persisted configuration before resuming. The exact guarded commands are maintained in
 [`docs/runbook.md`](./docs/runbook.md).
@@ -27,6 +27,8 @@ Preserve historical artifacts but never resume or use them to skip source ranges
 - `full-online-luna-20260904` used the superseded v1 proposal protocol.
 - `full-online-luna-v2-20260904` captured 64 packets and recorded zero decisions before the v2
   citation-linkage contract failed.
+- `full-online-luna-v3-20260904` recorded 1,920 decisions before a query-fragment contradiction
+  exposed ambiguous retry guidance. Its artifacts remain audit-only and must not be resumed.
 
 Run until the fixed-cutoff population has exact decision coverage, unless the operator stops it or
 a safety, quality, connection, or allowance failure requires a resumable stop. Completion ends at
@@ -61,7 +63,7 @@ online from REZICS; do not retrieve external metadata or copy the complete catal
   Runs without that field are interpreted as `legacy-v1`; `evidence-grounded-v2` and `legacy-v1`
   runs remain available for audit but cannot be resumed or used to generate a manifest. Start a
   new run rather than rewriting their JSONL.
-- Require a full Luna run to pin the `full-online-luna-v3` worker protocol in `run.json`. Runs that
+- Require a full Luna run to pin the `full-online-luna-v4` worker protocol in `run.json`. Runs that
   omit it, or pin another model, prompt, or proposal protocol, cannot start `work`; preserve them
   and initialize a fresh full run rather than mixing decision actors.
 - Require `evidenceMode: "online-batched"`. Legacy runs without this field are incompatible and
@@ -232,10 +234,12 @@ fixed-size summaries alongside the packet-storage sharding described above.
 
 The model no longer repeats natural-language explanations, source Unit IDs, and cited titles in
 the same field. Full-run workers attach exact citations directly to each typed basis or uncertainty;
-the coordinator deduplicates those citations and derives the persisted citation indexes. The v3
+the coordinator deduplicates those citations and derives the persisted citation indexes. The v4
 prompt renders the same basis claim contract used by deterministic validation, including required
 source, target, and non-source-candidate roles. Retries receive bounded typed categories and issue
-codes rather than raw validation messages or Unit IDs. This makes unlinked worker citations
+codes rather than raw validation messages or Unit IDs. Query-fragment contradictions receive a
+dedicated issue code that requires semantic reconsideration when stored Book-shaped evidence is
+present. This makes unlinked worker citations
 structurally impossible while keeping routine output bounded and preserving the full immutable
 packet and exact citation excerpts for audit.
 

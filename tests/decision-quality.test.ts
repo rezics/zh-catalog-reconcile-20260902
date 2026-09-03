@@ -30,8 +30,18 @@ import {
 } from "../src/io.ts";
 import { buildReviewPacket } from "../src/packets.ts";
 import { initializeRun } from "../src/run.ts";
+import { DecisionWorkerValidationError } from "../src/worker-feedback.ts";
 
 const Description = "这是一部围绕主角成长展开的长篇小说。";
+
+function captureError(operation: () => unknown): unknown {
+	try {
+		operation();
+	} catch (error) {
+		return error;
+	}
+	throw new Error("Expected operation to throw");
+}
 
 function book(id: string, title: string): BookEvidence {
 	const unhashed = {
@@ -220,9 +230,12 @@ test("question-shaped Book title cannot drive deletion against stored Book corro
 		reason: "query_fragment",
 		basis: [{ code: "question_like_title", citationIndexes: [0] }],
 	});
-	expect(() => validateDecisionAgainstPacket(runConfig, packet, decision)).toThrow(
-		"Query-fragment deletion conflicts",
-	);
+	const error = captureError(() => validateDecisionAgainstPacket(runConfig, packet, decision));
+	expect(error).toBeInstanceOf(DecisionWorkerValidationError);
+	expect((error as DecisionWorkerValidationError).feedback).toEqual({
+		category: "disposition_evidence_invalid",
+		issue: "query_fragment_contrary_book_evidence",
+	});
 });
 
 test("review uncertainty must cite both the source and its related candidate", () => {

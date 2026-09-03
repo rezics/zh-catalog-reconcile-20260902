@@ -99,7 +99,7 @@ For a complete run, prefer the single-coordinator concurrent inference command:
 
 ```powershell
 bun run reconcile work `
-  --run full-online-luna-v3-20260904 `
+  --run full-online-luna-v4-20260904 `
   --concurrency 32 `
   --packets-per-worker 2 `
   --max-attempts 5 `
@@ -113,12 +113,12 @@ then run the same command to resume. Never use a run containing decisions from a
 or prompt revision, and never use `--after-run` to skip an untrusted decision range. Workers force
 ChatGPT login, standard (non-Fast) service, medium reasoning, and a tool-free isolated Codex
 configuration. They never redeem a usage reset; an exhausted allowance is a resumable stop.
-The `full-online-luna-v3` worker protocol places citations inside each basis or uncertainty; the
+The `full-online-luna-v4` worker protocol places citations inside each basis or uncertainty; the
 coordinator alone derives the citation indexes stored in final decisions. The worker prompt and
 deterministic validator share one basis claim contract for allowed fields and required Unit roles.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
-Historical `full-online-luna-v2` runs remain readable by `status` and `audit` but cannot resume
-`work`.
+Historical `full-online-luna-v2` and `full-online-luna-v3` runs remain readable by `status` and
+`audit` but cannot resume `work`.
 
 ## Linux full run
 
@@ -132,15 +132,15 @@ After repository checks and `doctor` pass, initialize a fresh replacement run fr
 
 ```bash
 bun run reconcile init \
-  --run full-online-luna-v3-20260904 \
+  --run full-online-luna-v4-20260904 \
   --rezics-ref v1.7.0 \
   --cutoff 2026-09-02T16:00:00.000Z \
   --online-batch-size 64 \
-  --worker-protocol full-online-luna-v3
-bun run reconcile probe --run full-online-luna-v3-20260904
-bun run reconcile inventory --run full-online-luna-v3-20260904
+  --worker-protocol full-online-luna-v4
+bun run reconcile probe --run full-online-luna-v4-20260904
+bun run reconcile inventory --run full-online-luna-v4-20260904
 bun run reconcile work \
-  --run full-online-luna-v3-20260904 \
+  --run full-online-luna-v4-20260904 \
   --concurrency 32 \
   --packets-per-worker 2 \
   --max-attempts 5 \

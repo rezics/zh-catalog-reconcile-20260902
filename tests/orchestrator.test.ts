@@ -14,6 +14,7 @@ import {
 	DecisionProposalBatchSchema,
 	type DecisionQualityReport,
 	HistoricalLunaWorkerProtocolV2,
+	HistoricalLunaWorkerProtocolV3,
 	PacketCheckpointSchema,
 	SchemaVersion,
 	SourceDecisionSchema,
@@ -89,7 +90,7 @@ test("worker output schema uses the supported closed-object structured-output su
 });
 
 test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
-	expect(LunaPromptRevision).toBe("full-online-luna-v3");
+	expect(LunaPromptRevision).toBe("full-online-luna-v4");
 	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
 	expect(arguments_).toContain("--ignore-user-config");
 	expect(arguments_).toContain("fast_mode");
@@ -138,6 +139,17 @@ test("worker prompt makes evidence claim-local and carries bounded retry feedbac
 		category: "output_schema_invalid",
 		issue: "output_schema_contract",
 	});
+});
+
+test("query-fragment conflict feedback directs semantic reconsideration", () => {
+	const retry = workerPrompt([], {
+		category: "disposition_evidence_invalid",
+		issue: "query_fragment_contrary_book_evidence",
+	});
+	expect(retry).toContain("title shape alone cannot support query_fragment soft-delete");
+	expect(retry).toContain(
+		"Use review with non_book_status_unclear when Book status remains unresolved",
+	);
 });
 
 function sourceBook(id: string, title: string): BookEvidence {
@@ -714,7 +726,7 @@ test("coordinator rejects a run without the current worker protocol before captu
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v3");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -742,7 +754,35 @@ test("coordinator keeps historical v2 runs readable but refuses to resume them",
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v3");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
+		expect(nextCalled).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("coordinator keeps historical v3 runs readable but refuses to resume them", async () => {
+	const runId = `work-historical-v3-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+			workerProtocol: HistoricalLunaWorkerProtocolV3,
+		});
+		expect(config.workerProtocol).toEqual(HistoricalLunaWorkerProtocolV3);
+		let nextCalled = false;
+		await expect(
+			runConcurrentReconciliation(config, {
+				dependencies: {
+					next: async () => {
+						nextCalled = true;
+						return [];
+					},
+				},
+			}),
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v4");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });

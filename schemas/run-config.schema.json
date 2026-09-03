@@ -153,6 +153,34 @@
                 "proposalProtocol"
               ],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "codex"
+                },
+                "model": {
+                  "type": "string",
+                  "const": "gpt-5.6-luna"
+                },
+                "promptRevision": {
+                  "type": "string",
+                  "const": "full-online-luna-v4"
+                },
+                "proposalProtocol": {
+                  "type": "string",
+                  "const": "claim-local-citations-v2"
+                }
+              },
+              "required": [
+                "kind",
+                "model",
+                "promptRevision",
+                "proposalProtocol"
+              ],
+              "additionalProperties": false
             }
           ]
         },

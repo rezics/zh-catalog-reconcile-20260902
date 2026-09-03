@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 
-import { CurrentLunaWorkerProtocol } from "../src/contracts.ts";
+import {
+	CurrentLunaWorkerProtocol,
+	HistoricalLunaWorkerProtocolV2,
+	WorkerProtocolSchema,
+} from "../src/contracts.ts";
 import { loadRunConfig, pathExists, repositoryRoot, runDirectory } from "../src/io.ts";
 import { initializeRun } from "../src/run.ts";
 
@@ -90,7 +94,7 @@ test("init CLI pins the requested full-run worker protocol", async () => {
 				"--cutoff",
 				"2026-09-02T16:00:00.000Z",
 				"--worker-protocol",
-				"full-online-luna-v2",
+				"full-online-luna-v3",
 			],
 			{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
 		);
@@ -101,29 +105,38 @@ test("init CLI pins the requested full-run worker protocol", async () => {
 	}
 });
 
-test("init CLI rejects an obsolete worker protocol before creating a run", async () => {
-	const runId = `cli-worker-obsolete-${randomUUID()}`;
-	try {
-		const child = Bun.spawn(
-			[
-				process.execPath,
-				"run",
-				"src/cli.ts",
-				"init",
-				"--run",
-				runId,
-				"--rezics-ref",
-				"v1.7.0",
-				"--cutoff",
-				"2026-09-02T16:00:00.000Z",
-				"--worker-protocol",
-				"full-online-luna-v1",
-			],
-			{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
-		);
-		expect(await child.exited).toBe(1);
-		expect(await pathExists(runDirectory(runId))).toBeFalse();
-	} finally {
-		await rm(runDirectory(runId), { recursive: true, force: true });
-	}
+test("historical v2 worker protocol remains readable", () => {
+	expect(WorkerProtocolSchema.parse(HistoricalLunaWorkerProtocolV2)).toEqual(
+		HistoricalLunaWorkerProtocolV2,
+	);
 });
+
+test.each(["full-online-luna-v1", "full-online-luna-v2"])(
+	"init CLI rejects obsolete worker protocol %s before creating a run",
+	async (workerProtocol) => {
+		const runId = `cli-worker-obsolete-${randomUUID()}`;
+		try {
+			const child = Bun.spawn(
+				[
+					process.execPath,
+					"run",
+					"src/cli.ts",
+					"init",
+					"--run",
+					runId,
+					"--rezics-ref",
+					"v1.7.0",
+					"--cutoff",
+					"2026-09-02T16:00:00.000Z",
+					"--worker-protocol",
+					workerProtocol,
+				],
+				{ cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
+			);
+			expect(await child.exited).toBe(1);
+			expect(await pathExists(runDirectory(runId))).toBeFalse();
+		} finally {
+			await rm(runDirectory(runId), { recursive: true, force: true });
+		}
+	},
+);

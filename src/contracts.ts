@@ -140,9 +140,23 @@ export type DecisionPolicyRevision = z.infer<typeof DecisionPolicyRevisionSchema
 export const CurrentDecisionPolicyRevision: DecisionPolicyRevision = "evidence-claims-v3";
 
 export const LunaWorkerModel = "gpt-5.6-luna" as const;
-export const LunaWorkerPromptRevision = "full-online-luna-v2" as const;
-export const LunaProposalProtocol = "claim-local-citations-v1" as const;
-export const WorkerProtocolSchema = z
+export const LunaWorkerPromptRevision = "full-online-luna-v3" as const;
+export const LunaProposalProtocol = "claim-local-citations-v2" as const;
+export const HistoricalLunaWorkerProtocolV2 = {
+	kind: "codex",
+	model: LunaWorkerModel,
+	promptRevision: "full-online-luna-v2",
+	proposalProtocol: "claim-local-citations-v1",
+} as const;
+const HistoricalLunaWorkerProtocolV2Schema = z
+	.object({
+		kind: z.literal("codex"),
+		model: z.literal(LunaWorkerModel),
+		promptRevision: z.literal(HistoricalLunaWorkerProtocolV2.promptRevision),
+		proposalProtocol: z.literal(HistoricalLunaWorkerProtocolV2.proposalProtocol),
+	})
+	.strict();
+const CurrentLunaWorkerProtocolSchema = z
 	.object({
 		kind: z.literal("codex"),
 		model: z.literal(LunaWorkerModel),
@@ -150,13 +164,17 @@ export const WorkerProtocolSchema = z
 		proposalProtocol: z.literal(LunaProposalProtocol),
 	})
 	.strict();
+export const WorkerProtocolSchema = z.union([
+	HistoricalLunaWorkerProtocolV2Schema,
+	CurrentLunaWorkerProtocolSchema,
+]);
 export type WorkerProtocol = z.infer<typeof WorkerProtocolSchema>;
-export const CurrentLunaWorkerProtocol: WorkerProtocol = {
+export const CurrentLunaWorkerProtocol = {
 	kind: "codex",
 	model: LunaWorkerModel,
 	promptRevision: LunaWorkerPromptRevision,
 	proposalProtocol: LunaProposalProtocol,
-};
+} as const satisfies WorkerProtocol;
 
 export const SourceStartSchema = z
 	.object({
@@ -588,12 +606,20 @@ const DecisionProposalBaseFields = {
 	note: z.string().trim().min(8).max(240).nullable(),
 } as const;
 
-export const DecisionProposalBasisSchema = z
-	.object({
-		code: DecisionBasisCodeSchema,
-		citations: z.array(DecisionEvidenceCitationSchema).min(1).max(6),
-	})
-	.strict();
+export const DecisionProposalBasisSchema = z.union([
+	z
+		.object({
+			code: z.literal("distinct_candidate_evidence"),
+			citations: z.array(DecisionEvidenceCitationSchema).min(2).max(6),
+		})
+		.strict(),
+	z
+		.object({
+			code: DecisionBasisCodeSchema.exclude(["distinct_candidate_evidence"]),
+			citations: z.array(DecisionEvidenceCitationSchema).min(1).max(6),
+		})
+		.strict(),
+]);
 export type DecisionProposalBasis = z.infer<typeof DecisionProposalBasisSchema>;
 
 export const DecisionProposalUncertaintySchema = z

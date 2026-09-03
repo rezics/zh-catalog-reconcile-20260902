@@ -38,10 +38,13 @@ setting.
 Workers attach each exact citation directly to the typed basis or uncertainty it supports. The
 coordinator deterministically deduplicates citations and assigns the zero-based indexes used by
 the persisted decision schema. Workers never manage a separate citation array, so an unlinked
-citation cannot cross the proposal boundary. Validation failures are retried with a bounded typed
-feedback category; the feedback never changes a disposition or substitutes deterministic catalog
-heuristics. A terminal worker failure records only a bounded failure code, part number, and request
-count; raw prompts, responses, Unit IDs, and citation excerpts are not logged.
+citation cannot cross the proposal boundary. The v3 prompt renders the same basis claim contract
+used by deterministic validation, including allowed fields and required source, target, or
+non-source-candidate roles. Validation failures are retried with a bounded typed category and
+issue code; the feedback never changes a disposition or substitutes deterministic catalog
+heuristics. A terminal worker failure records only bounded failure and feedback codes, part
+number, and request count; raw prompts, responses, Unit IDs, and citation excerpts are not logged
+or printed.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

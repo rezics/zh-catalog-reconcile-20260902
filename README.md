@@ -55,6 +55,8 @@ and records the part. Total work is not count-limited.
 - [`docs/decision-policy.md`](./docs/decision-policy.md) defines AI outcomes and evidence rules.
 - [`docs/architecture.md`](./docs/architecture.md) explains online data flow and scaling.
 - [`docs/runbook.md`](./docs/runbook.md) contains operator commands through manifest generation.
+- [`references/decision-template.md`](./references/decision-template.md) lists the worker and
+  persisted evidence-claim contract.
 - [`.agents/skills/zh-catalog-reconcile/SKILL.md`](./.agents/skills/zh-catalog-reconcile/SKILL.md)
   instructs an AI task how to continue the run safely.
 - `src/` contains deterministic online querying, packet, validation, and manifest tooling.
@@ -83,8 +85,8 @@ evidence remain in the predecessor run.
 Run a fresh full-corpus Luna reconciliation with bounded inference concurrency:
 
 ```powershell
-bun run reconcile init --run full-online-luna-v2-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v2
-bun run reconcile work --run full-online-luna-v2-20260904 --concurrency 32 --packets-per-worker 2
+bun run reconcile init --run full-online-luna-v3-20260904 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z --online-batch-size 64 --worker-protocol full-online-luna-v3
+bun run reconcile work --run full-online-luna-v3-20260904 --concurrency 32 --packets-per-worker 2
 ```
 
 Do not use `--after-run` when replacing an untrusted predecessor. There is deliberately no

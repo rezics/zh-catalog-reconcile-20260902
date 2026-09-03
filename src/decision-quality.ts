@@ -21,6 +21,7 @@ import {
 	SchemaVersion,
 	type SourceDecision,
 } from "./contracts.ts";
+import { BasisClaimContracts, IdentityEvidenceFieldValues } from "./decision-claim-contract.ts";
 import {
 	listPartFiles,
 	nowIso,
@@ -30,31 +31,14 @@ import {
 	runDirectory,
 	writeJsonAtomic,
 } from "./io.ts";
+import { workerValidationError } from "./worker-feedback.ts";
 
 const MaximumSampleIssues = 100;
 const BlanketReviewMinimum = 10;
 const DuplicateExplanationMinimum = 3;
-const IdentityEvidenceFields = new Set<DecisionEvidenceCitation["field"]>([
-	"localization_title",
-	"localization_summary",
-	"localization_description",
-	"alias",
-	"attribution",
-	"book_isbn13",
-	"book_publication_date",
-	"book_page_count",
-	"book_word_count",
-	"suspicious_signal",
-]);
-const SynopsisFields = new Set<DecisionEvidenceCitation["field"]>([
-	"localization_summary",
-	"localization_description",
-]);
-const TitleFields = new Set<DecisionEvidenceCitation["field"]>(["localization_title", "alias"]);
-const CorrectionEvidenceFields = new Set<DecisionEvidenceCitation["field"]>([
-	...IdentityEvidenceFields,
-	"book_release_status",
-]);
+const IdentityEvidenceFields = new Set<DecisionEvidenceCitation["field"]>(
+	IdentityEvidenceFieldValues,
+);
 
 function revisionEvidenceField(patch: RevisionPatch): DecisionEvidenceCitation["field"] {
 	switch (patch.kind) {
@@ -145,13 +129,20 @@ function citationValues(
 
 function validateCitation(packet: ReviewPacket, citation: DecisionEvidenceCitation): void {
 	const book = packet.candidates.find(({ id }) => id === citation.unitId);
-	if (!book) throw new Error(`Decision citation Unit is outside the packet: ${citation.unitId}`);
+	if (!book)
+		throw workerValidationError(
+			"Decision citation Unit is outside the packet",
+			"citation_invalid",
+			"citation_contract",
+		);
 	const excerpt = normalizedText(citation.excerpt);
 	if (
 		!citationValues(packet, book, citation).some((value) => normalizedText(value).includes(excerpt))
 	)
-		throw new Error(
-			`Decision citation does not match stored ${citation.field} evidence for ${citation.unitId}`,
+		throw workerValidationError(
+			`Decision citation does not match stored ${citation.field} evidence`,
+			"citation_invalid",
+			"citation_contract",
 		);
 }
 
@@ -214,7 +205,12 @@ function validateCitationSet(
 	const citationKeys = new Set<string>();
 	for (const citation of citations) {
 		const key = `${citation.unitId}\u0000${citation.field}\u0000${normalizedText(citation.excerpt)}`;
-		if (citationKeys.has(key)) throw new Error("Decision contains a duplicate evidence citation");
+		if (citationKeys.has(key))
+			throw workerValidationError(
+				"Decision contains a duplicate evidence citation",
+				"citation_invalid",
+				"citation_contract",
+			);
 		citationKeys.add(key);
 		validateCitation(packet, citation);
 	}
@@ -290,33 +286,40 @@ function citationsForIndexes(
 	const citations: DecisionEvidenceCitation[] = [];
 	const uniqueIndexes = new Set<number>();
 	for (const index of indexes) {
-		if (uniqueIndexes.has(index)) throw new Error(`${label} repeats citation index ${index}`);
+		if (uniqueIndexes.has(index))
+			throw workerValidationError(
+				`${label} repeats a citation index`,
+				"citation_invalid",
+				"citation_contract",
+			);
 		uniqueIndexes.add(index);
 		const citation = decision.citations[index];
-		if (!citation) throw new Error(`${label} references missing citation index ${index}`);
+		if (!citation)
+			throw workerValidationError(
+				`${label} references a missing citation index`,
+				"citation_invalid",
+				"citation_contract",
+			);
 		usedIndexes.add(index);
 		citations.push(citation);
 	}
 	return citations;
 }
 
-function requireOnly(
-	code: string,
-	citations: readonly DecisionEvidenceCitation[],
-	predicate: (citation: DecisionEvidenceCitation) => boolean,
-): void {
-	if (!citations.every(predicate))
-		throw new Error(`Basis ${code} contains a citation that does not prove that claim`);
+function basisClaimError(message: string): never {
+	throw workerValidationError(message, "basis_invalid", "basis_claim_contract");
 }
 
-function requireUnits(
-	code: string,
-	citations: readonly DecisionEvidenceCitation[],
-	unitIds: readonly string[],
-): void {
-	for (const unitId of unitIds)
-		if (!citations.some((citation) => citation.unitId === unitId))
-			throw new Error(`Basis ${code} must cite Unit ${unitId}`);
+function dispositionEvidenceError(message: string): never {
+	throw workerValidationError(
+		message,
+		"disposition_evidence_invalid",
+		"disposition_evidence_contract",
+	);
+}
+
+function uncertaintyError(message: string): never {
+	throw workerValidationError(message, "uncertainty_invalid", "uncertainty_contract");
 }
 
 function validateBasisClaim(
@@ -326,128 +329,42 @@ function validateBasisClaim(
 ): void {
 	const sourceId = decision.sourceUnitId;
 	const targetId = decision.disposition === "merge" ? decision.targetUnitId : null;
-	switch (basis.code) {
-		case "booklike_title":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) => citation.unitId === sourceId && TitleFields.has(citation.field),
-			);
+	const contract = BasisClaimContracts[basis.code];
+	const allowedFields: readonly DecisionEvidenceCitation["field"][] = contract.citationFields;
+	if (!citations.every(({ field }) => allowedFields.includes(field)))
+		basisClaimError(`Basis ${basis.code} contains a field that does not prove that claim`);
+
+	const hasSource = citations.some(({ unitId }) => unitId === sourceId);
+	switch (contract.citationUnitRule) {
+		case "source-only":
+			if (!citations.every(({ unitId }) => unitId === sourceId))
+				basisClaimError(`Basis ${basis.code} accepts source citations only`);
 			return;
-		case "synopsis_describes_work":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) => citation.unitId === sourceId && SynopsisFields.has(citation.field),
-			);
+		case "source-required":
+			if (!hasSource) basisClaimError(`Basis ${basis.code} must cite the source Unit`);
 			return;
-		case "author_attribution_present":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) => citation.unitId === sourceId && citation.field === "attribution",
-			);
+		case "source-and-target":
+			if (targetId === null) basisClaimError(`Basis ${basis.code} requires a merge target`);
+			if (!hasSource) basisClaimError(`Basis ${basis.code} must cite the source Unit`);
+			if (!citations.some(({ unitId }) => unitId === targetId))
+				basisClaimError(`Basis ${basis.code} must cite the target Unit`);
 			return;
-		case "identifier_present":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) => citation.unitId === sourceId && citation.field === "book_isbn13",
-			);
-			return;
-		case "distinct_candidate_evidence":
-			requireOnly(basis.code, citations, (citation) => IdentityEvidenceFields.has(citation.field));
-			requireUnits(basis.code, citations, [sourceId]);
+		case "source-and-non-source-candidate":
+			if (!hasSource)
+				throw workerValidationError(
+					"Basis distinct_candidate_evidence must cite the source Unit",
+					"basis_invalid",
+					"distinct_candidate_missing_source",
+				);
 			if (!citations.some(({ unitId }) => unitId !== sourceId))
-				throw new Error("Basis distinct_candidate_evidence must cite a non-source candidate");
-			return;
-		case "same_title":
-			if (targetId === null) throw new Error("Basis same_title is valid only for merge");
-			requireOnly(basis.code, citations, (citation) => citation.field === "localization_title");
-			requireUnits(basis.code, citations, [sourceId, targetId]);
-			return;
-		case "title_variant_same_work":
-			if (targetId === null) throw new Error(`Basis ${basis.code} is valid only for merge`);
-			requireOnly(basis.code, citations, (citation) => TitleFields.has(citation.field));
-			requireUnits(basis.code, citations, [sourceId, targetId]);
-			return;
-		case "same_synopsis":
-			if (targetId === null) throw new Error("Basis same_synopsis is valid only for merge");
-			requireOnly(basis.code, citations, (citation) => SynopsisFields.has(citation.field));
-			requireUnits(basis.code, citations, [sourceId, targetId]);
-			return;
-		case "same_attribution":
-			if (targetId === null) throw new Error("Basis same_attribution is valid only for merge");
-			requireOnly(basis.code, citations, (citation) => citation.field === "attribution");
-			requireUnits(basis.code, citations, [sourceId, targetId]);
-			return;
-		case "same_identifier":
-			if (targetId === null) throw new Error("Basis same_identifier is valid only for merge");
-			requireOnly(basis.code, citations, (citation) => citation.field === "book_isbn13");
-			requireUnits(basis.code, citations, [sourceId, targetId]);
-			return;
-		case "query_like_title":
-		case "question_like_title":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) =>
-					citation.unitId === sourceId &&
-					(citation.field === "localization_title" || citation.field === "suspicious_signal"),
-			);
-			return;
-		case "character_identity":
-		case "person_or_entity_identity":
-		case "malformed_metadata":
-		case "placeholder_metadata":
-		case "non_book_identity":
-			requireOnly(
-				basis.code,
-				citations,
-				(citation) => citation.unitId === sourceId && IdentityEvidenceFields.has(citation.field),
-			);
-			return;
-		case "metadata_correction_supported":
-			requireOnly(basis.code, citations, (citation) =>
-				CorrectionEvidenceFields.has(citation.field),
-			);
-			requireUnits(basis.code, citations, [sourceId]);
-			return;
-		case "attribution_correction_supported":
-			requireOnly(basis.code, citations, (citation) => citation.field === "attribution");
-			requireUnits(basis.code, citations, [sourceId]);
+				throw workerValidationError(
+					"Basis distinct_candidate_evidence must cite a non-source candidate",
+					"basis_invalid",
+					"distinct_candidate_missing_non_source_candidate",
+				);
 			return;
 	}
 }
-
-const BasisCodesByDisposition: Readonly<
-	Record<Exclude<SourceDecision["disposition"], "review">, ReadonlySet<DecisionBasisCode>>
-> = {
-	keep: new Set([
-		"booklike_title",
-		"synopsis_describes_work",
-		"author_attribution_present",
-		"identifier_present",
-		"distinct_candidate_evidence",
-	]),
-	merge: new Set([
-		"same_title",
-		"title_variant_same_work",
-		"same_synopsis",
-		"same_attribution",
-		"same_identifier",
-	]),
-	soft_delete: new Set([
-		"query_like_title",
-		"question_like_title",
-		"character_identity",
-		"person_or_entity_identity",
-		"malformed_metadata",
-		"placeholder_metadata",
-		"non_book_identity",
-	]),
-	revise: new Set(["metadata_correction_supported", "attribution_correction_supported"]),
-};
 
 function validateBasis(
 	decision: Exclude<SourceDecision, { readonly disposition: "review" }>,
@@ -455,10 +372,11 @@ function validateBasis(
 ): void {
 	const codes = new Set<DecisionBasisCode>();
 	for (const basis of decision.basis) {
-		if (codes.has(basis.code)) throw new Error(`Decision repeats basis code ${basis.code}`);
+		if (codes.has(basis.code)) basisClaimError(`Decision repeats basis code ${basis.code}`);
 		codes.add(basis.code);
-		if (!BasisCodesByDisposition[decision.disposition].has(basis.code))
-			throw new Error(`Basis ${basis.code} is not valid for ${decision.disposition}`);
+		const allowedDispositions: readonly string[] = BasisClaimContracts[basis.code].dispositions;
+		if (!allowedDispositions.includes(decision.disposition))
+			basisClaimError(`Basis ${basis.code} is not valid for ${decision.disposition}`);
 		const citations = citationsForIndexes(
 			decision,
 			basis.citationIndexes,
@@ -469,20 +387,21 @@ function validateBasis(
 	}
 
 	if (decision.disposition === "keep") {
-		if (!codes.has("booklike_title")) throw new Error("Keep requires basis booklike_title");
+		if (!codes.has("booklike_title"))
+			dispositionEvidenceError("Keep requires basis booklike_title");
 		if (
 			!["synopsis_describes_work", "author_attribution_present", "identifier_present"].some(
 				(code) => codes.has(code as DecisionBasisCode),
 			)
 		)
-			throw new Error("Keep requires synopsis, attribution, or identifier corroboration");
+			dispositionEvidenceError("Keep requires synopsis, attribution, or identifier corroboration");
 	}
 	if (decision.disposition === "merge") {
 		const titleSupported = codes.has("same_title") || codes.has("title_variant_same_work");
 		const corroborated =
 			codes.has("same_synopsis") || codes.has("same_attribution") || codes.has("same_identifier");
 		if (!codes.has("same_identifier") && !(titleSupported && corroborated))
-			throw new Error(
+			dispositionEvidenceError(
 				"Merge requires a shared identifier or title correspondence plus synopsis/attribution corroboration",
 			);
 	}
@@ -492,7 +411,7 @@ function validateBasis(
 			!codes.has("query_like_title") &&
 			!codes.has("question_like_title")
 		)
-			throw new Error("Soft-delete reason query_fragment lacks its required title basis");
+			dispositionEvidenceError("Soft-delete reason query_fragment lacks its required title basis");
 		const requiredCode: Readonly<
 			Record<Exclude<typeof decision.reason, "query_fragment">, DecisionBasisCode>
 		> = {
@@ -503,7 +422,7 @@ function validateBasis(
 			other: "non_book_identity",
 		};
 		if (decision.reason !== "query_fragment" && !codes.has(requiredCode[decision.reason]))
-			throw new Error(`Soft-delete reason ${decision.reason} lacks its required basis`);
+			dispositionEvidenceError(`Soft-delete reason ${decision.reason} lacks its required basis`);
 	}
 	if (decision.disposition === "revise") {
 		const requiredCode =
@@ -511,7 +430,7 @@ function validateBasis(
 				? "attribution_correction_supported"
 				: "metadata_correction_supported";
 		if (!codes.has(requiredCode))
-			throw new Error(`Revision reason ${decision.reason} lacks its required basis`);
+			dispositionEvidenceError(`Revision reason ${decision.reason} lacks its required basis`);
 		for (const patch of decision.patches) {
 			const field = revisionEvidenceField(patch);
 			if (
@@ -519,7 +438,7 @@ function validateBasis(
 					(citation) => citation.field === field && patch.evidenceUnitIds.includes(citation.unitId),
 				)
 			)
-				throw new Error(`Revision patch ${patch.kind} lacks a linked ${field} citation`);
+				dispositionEvidenceError(`Revision patch ${patch.kind} lacks a linked ${field} citation`);
 		}
 	}
 }
@@ -534,7 +453,7 @@ function validateUncertainties(
 	const kinds = new Set<string>();
 	for (const uncertainty of decision.uncertainties) {
 		if (kinds.has(uncertainty.kind))
-			throw new Error(`Decision repeats uncertainty kind ${uncertainty.kind}`);
+			uncertaintyError(`Decision repeats uncertainty kind ${uncertainty.kind}`);
 		kinds.add(uncertainty.kind);
 		const citations = citationsForIndexes(
 			decision,
@@ -543,27 +462,25 @@ function validateUncertainties(
 			`Uncertainty ${uncertainty.kind}`,
 		);
 		if (!citations.some(({ unitId }) => unitId === decision.sourceUnitId))
-			throw new Error(`Uncertainty ${uncertainty.kind} must cite the source Unit`);
+			uncertaintyError(`Uncertainty ${uncertainty.kind} must cite the source Unit`);
 		for (const relatedUnitId of uncertainty.relatedUnitIds) {
 			if (!evidenceIds.has(relatedUnitId))
-				throw new Error(
-					`Review uncertainty references evidence outside the packet: ${relatedUnitId}`,
-				);
+				uncertaintyError("Review uncertainty references evidence outside the packet");
 			if (
 				candidateIds.has(relatedUnitId) &&
 				!citations.some(({ unitId }) => unitId === relatedUnitId)
 			)
-				throw new Error(`Review uncertainty must cite related candidate ${relatedUnitId}`);
+				uncertaintyError("Review uncertainty must cite related candidate evidence");
 		}
 		if (uncertainty.kind === "candidate_identity_ambiguous") {
 			const relatedCandidateIds = uncertainty.relatedUnitIds.filter(
 				(unitId) => unitId !== decision.sourceUnitId && candidateIds.has(unitId),
 			);
 			if (relatedCandidateIds.length === 0)
-				throw new Error("Candidate ambiguity must identify a non-source candidate Unit");
+				uncertaintyError("Candidate ambiguity must identify a non-source candidate Unit");
 			for (const unitId of relatedCandidateIds)
 				if (!citations.some((citation) => citation.unitId === unitId))
-					throw new Error(`Candidate ambiguity must cite candidate Unit ${unitId}`);
+					uncertaintyError("Candidate ambiguity must cite every related candidate Unit");
 		}
 		if (
 			uncertainty.kind === "non_book_status_unclear" &&
@@ -573,7 +490,7 @@ function validateUncertainties(
 					(citation.field === "localization_title" || citation.field === "suspicious_signal"),
 			)
 		)
-			throw new Error("Non-Book uncertainty must cite the source title or suspicious signal");
+			uncertaintyError("Non-Book uncertainty must cite the source title or suspicious signal");
 	}
 }
 
@@ -601,7 +518,7 @@ export function validateDecisionAgainstPacket(
 				localizations.some(({ title }) => Boolean(title?.trim())),
 		);
 		if ((hasSynopsis && hasAuthorship) || source?.details.isbn13)
-			throw new Error(
+			dispositionEvidenceError(
 				"Query-fragment deletion conflicts with stored synopsis/authorship or identifier evidence; use semantic review, not title-shape deletion",
 			);
 	}
@@ -613,7 +530,11 @@ export function validateDecisionAgainstPacket(
 
 	for (const index of decision.citations.keys())
 		if (!usedCitationIndexes.has(index))
-			throw new Error(`Citation index ${index} is not linked to a basis or uncertainty`);
+			throw workerValidationError(
+				"A citation is not linked to a basis or uncertainty",
+				"citation_invalid",
+				"citation_contract",
+			);
 }
 
 function normalizedExplanationTemplate(decision: PersistedSourceDecision): string | null {

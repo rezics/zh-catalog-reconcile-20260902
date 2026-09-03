@@ -36,7 +36,7 @@ online from REZICS; do not retrieve external metadata or copy the complete catal
   Runs without that field are interpreted as `legacy-v1`; `evidence-grounded-v2` and `legacy-v1`
   runs remain available for audit but cannot be resumed or used to generate a manifest. Start a
   new run rather than rewriting their JSONL.
-- Require a full Luna run to pin the `full-online-luna-v2` worker protocol in `run.json`. Runs that
+- Require a full Luna run to pin the `full-online-luna-v3` worker protocol in `run.json`. Runs that
   omit it, or pin another model, prompt, or proposal protocol, cannot start `work`; preserve them
   and initialize a fresh full run rather than mixing decision actors.
 - Require `evidenceMode: "online-batched"`. Legacy runs without this field are incompatible and
@@ -207,9 +207,12 @@ fixed-size summaries alongside the packet-storage sharding described above.
 
 The model no longer repeats natural-language explanations, source Unit IDs, and cited titles in
 the same field. Full-run workers attach exact citations directly to each typed basis or uncertainty;
-the coordinator deduplicates those citations and derives the persisted citation indexes. This makes
-unlinked worker citations structurally impossible while keeping routine output bounded and
-preserving the full immutable packet and exact citation excerpts for audit.
+the coordinator deduplicates those citations and derives the persisted citation indexes. The v3
+prompt renders the same basis claim contract used by deterministic validation, including required
+source, target, and non-source-candidate roles. Retries receive bounded typed categories and issue
+codes rather than raw validation messages or Unit IDs. This makes unlinked worker citations
+structurally impossible while keeping routine output bounded and preserving the full immutable
+packet and exact citation excerpts for audit.
 
 The Luna coordinator defaults to 32 in-flight requests, two packets per request, and one captured
 part of 64 sources at a time. The operator's execution host is a Fedora Threadripper 3970X with

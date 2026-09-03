@@ -8,10 +8,12 @@ import {
 	type BookEvidence,
 	BookEvidenceSchema,
 	CurrentLunaWorkerProtocol,
+	type DecisionEvidenceCitation,
 	DecisionProgressCheckpointSchema,
 	type DecisionProposal,
 	DecisionProposalBatchSchema,
 	type DecisionQualityReport,
+	HistoricalLunaWorkerProtocolV2,
 	PacketCheckpointSchema,
 	SchemaVersion,
 	SourceDecisionSchema,
@@ -52,6 +54,15 @@ function initializeWorkerRun(
 	return initializeRun({ ...input, workerProtocol: CurrentLunaWorkerProtocol });
 }
 
+function captureError(operation: () => unknown): unknown {
+	try {
+		operation();
+	} catch (error) {
+		return error;
+	}
+	throw new Error("Expected operation to throw");
+}
+
 test("worker output schema uses the supported closed-object structured-output subset", () => {
 	const schema = z.toJSONSchema(DecisionProposalBatchSchema, {
 		target: "draft-2020-12",
@@ -78,7 +89,7 @@ test("worker output schema uses the supported closed-object structured-output su
 });
 
 test("Luna worker isolates semantic inference from Fast mode, tools, and API-key billing", () => {
-	expect(LunaPromptRevision).toBe("full-online-luna-v2");
+	expect(LunaPromptRevision).toBe("full-online-luna-v3");
 	const arguments_ = codexLunaArguments("C:\\temp\\response.json", "C:\\temp\\worker");
 	expect(arguments_).toContain("--ignore-user-config");
 	expect(arguments_).toContain("fast_mode");
@@ -103,18 +114,30 @@ test("worker prompt makes evidence claim-local and carries bounded retry feedbac
 	const initial = workerPrompt([]);
 	expect(initial).toContain("Put citations directly inside\nthe basis or uncertainty");
 	expect(initial).toContain("do not\noutput citationIndexes");
+	expect(initial).toContain("Every basis must satisfy this deterministic claim contract");
+	expect(initial).toContain("distinct_candidate_evidence [keep]: fields=localization_title");
+	expect(initial).toContain(
+		"citations must include sourceUnitId and at least one packet candidate whose ID differs from sourceUnitId",
+	);
 	expect(initial).not.toContain("previous response");
 
-	const retry = workerPrompt([], "citation_invalid");
-	expect(retry).toContain('validation category was "citation_invalid"');
+	const retry = workerPrompt([], {
+		category: "basis_invalid",
+		issue: "distinct_candidate_missing_non_source_candidate",
+	});
+	expect(retry).toContain(
+		'validation feedback was {"category":"basis_invalid","issue":"distinct_candidate_missing_non_source_candidate"}',
+	);
 	expect(retry).toContain("without changing a semantic disposition merely");
-	expect(retry).toContain("nested under the claim each citation proves");
-	expect(classifyDecisionWorkerFeedback(new Error("Basis same_title is invalid"))).toBe(
-		"basis_invalid",
-	);
-	expect(classifyDecisionWorkerFeedback(new Error("Citation excerpt is not grounded"))).toBe(
-		"citation_invalid",
-	);
+	expect(retry).toContain("include at least one citation whose Unit ID is a packet candidate");
+	expect(classifyDecisionWorkerFeedback(new Error("Basis same_title is invalid"))).toEqual({
+		category: "decision_validation_invalid",
+		issue: "decision_contract",
+	});
+	expect(classifyDecisionWorkerFeedback(new SyntaxError("invalid JSON"))).toEqual({
+		category: "output_schema_invalid",
+		issue: "output_schema_contract",
+	});
 });
 
 function sourceBook(id: string, title: string): BookEvidence {
@@ -196,6 +219,16 @@ test("worker proposal schema rejects the old top-level citation-index protocol",
 		],
 	});
 	expect(legacy.success).toBeFalse();
+	const oneSidedDistinctCandidate = proposal(source);
+	if (oneSidedDistinctCandidate.disposition !== "keep")
+		throw new Error("Fixture proposal must be keep");
+	oneSidedDistinctCandidate.basis.push({
+		code: "distinct_candidate_evidence",
+		citations: [{ unitId: source.id, field: "localization_title", excerpt: "协议作品" }],
+	});
+	expect(
+		DecisionProposalBatchSchema.safeParse({ decisions: [oneSidedDistinctCandidate] }).success,
+	).toBeFalse();
 });
 
 function report(runId: string, decisionCount: number): DecisionQualityReport {
@@ -268,7 +301,9 @@ test("proposal compilation owns immutable envelope fields and rejects incomplete
 		]);
 		if (decision?.disposition === "keep")
 			expect(decision.basis.map(({ citationIndexes }) => citationIndexes)).toEqual([[0], [1]]);
-		expect(() => compileDecisionProposals(config, [item], [])).toThrow("omitted assigned source");
+		expect(() => compileDecisionProposals(config, [item], [])).toThrow(
+			"omitted an assigned source",
+		);
 		expect(() =>
 			compileDecisionProposals(config, [item], [proposal(source), proposal(source)]),
 		).toThrow("duplicate source");
@@ -331,6 +366,70 @@ test("proposal compilation deduplicates claim-local citations without losing lin
 	}
 });
 
+test("distinct candidate evidence requires source and non-source candidate citations", async () => {
+	const runId = `proposal-distinct-candidate-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "来源作品");
+		const candidate = sourceBook(randomUUID(), "不同候选作品");
+		const packet = buildReviewPacket(config, 0, "来源作品", [source], [candidate]);
+		const item = { packet, undecidedSourceUnitIds: [source.id] };
+		const base = proposal(source);
+		if (base.disposition !== "keep") throw new Error("Fixture proposal must be keep");
+		const sourceTitle = {
+			unitId: source.id,
+			field: "localization_title" as const,
+			excerpt: "来源作品",
+		};
+		const sourceSummary = {
+			unitId: source.id,
+			field: "localization_summary" as const,
+			excerpt: "一部具有完整人物与情节设定的小说。",
+		};
+		const candidateTitle = {
+			unitId: candidate.id,
+			field: "localization_title" as const,
+			excerpt: "不同候选作品",
+		};
+		const withDistinctBasis = (
+			citations: [DecisionEvidenceCitation, DecisionEvidenceCitation],
+		) => ({
+			...base,
+			basis: [...base.basis, { code: "distinct_candidate_evidence" as const, citations }],
+		});
+
+		const missingCandidate = withDistinctBasis([sourceTitle, sourceSummary]);
+		expect(
+			classifyDecisionWorkerFeedback(
+				captureError(() => compileDecisionProposals(config, [item], [missingCandidate])),
+			),
+		).toEqual({
+			category: "basis_invalid",
+			issue: "distinct_candidate_missing_non_source_candidate",
+		});
+
+		const missingSource = withDistinctBasis([candidateTitle, candidateTitle]);
+		expect(
+			classifyDecisionWorkerFeedback(
+				captureError(() => compileDecisionProposals(config, [item], [missingSource])),
+			),
+		).toEqual({
+			category: "basis_invalid",
+			issue: "distinct_candidate_missing_source",
+		});
+
+		const valid = withDistinctBasis([sourceTitle, candidateTitle]);
+		expect(compileDecisionProposals(config, [item], [valid])).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("proposal compilation links review uncertainty citations", async () => {
 	const runId = `proposal-review-${Date.now()}`;
 	const directory = runDirectory(runId);
@@ -387,12 +486,26 @@ test("coordinator gives semantic validation feedback to a retry", async () => {
 			cutoff: "2026-09-02T16:00:00.000Z",
 		});
 		const source = sourceBook(randomUUID(), "反馈作品");
-		const packet = buildReviewPacket(config, 0, "反馈作品", [source], []);
+		const candidate = sourceBook(randomUUID(), "不同反馈候选");
+		const packet = buildReviewPacket(config, 0, "反馈作品", [source], [candidate]);
 		const item = { packet, undecidedSourceUnitIds: [source.id] };
 		const validProposal = proposal(source);
 		if (validProposal.disposition !== "keep") throw new Error("Fixture proposal must be keep");
-		const synopsisBasis = validProposal.basis[1];
-		if (!synopsisBasis) throw new Error("Fixture synopsis basis is missing");
+		validProposal.basis.push({
+			code: "distinct_candidate_evidence",
+			citations: [
+				{
+					unitId: source.id,
+					field: "localization_title",
+					excerpt: "反馈作品",
+				},
+				{
+					unitId: candidate.id,
+					field: "localization_title",
+					excerpt: "不同反馈候选",
+				},
+			],
+		});
 		let attempts = 0;
 		let nextCalls = 0;
 		let recorded = 0;
@@ -406,26 +519,31 @@ test("coordinator gives semantic validation feedback to a retry", async () => {
 						attempts += 1;
 						if (attempts === 1) {
 							expect(options?.feedback).toBeUndefined();
-							return [
+							const invalidProposal = structuredClone(validProposal);
+							if (invalidProposal.disposition !== "keep")
+								throw new Error("Fixture proposal must be keep");
+							const distinctBasis = invalidProposal.basis.find(
+								({ code }) => code === "distinct_candidate_evidence",
+							);
+							if (!distinctBasis) throw new Error("Fixture distinct-candidate basis is missing");
+							distinctBasis.citations = [
 								{
-									...validProposal,
-									basis: [
-										{
-											code: "booklike_title",
-											citations: [
-												{
-													unitId: source.id,
-													field: "localization_summary",
-													excerpt: "一部具有完整人物与情节设定的小说。",
-												},
-											],
-										},
-										synopsisBasis,
-									],
+									unitId: source.id,
+									field: "localization_title",
+									excerpt: "反馈作品",
+								},
+								{
+									unitId: source.id,
+									field: "localization_summary",
+									excerpt: "一部具有完整人物与情节设定的小说。",
 								},
 							];
+							return [invalidProposal];
 						}
-						expect(options?.feedback).toBe("basis_invalid");
+						expect(options?.feedback).toEqual({
+							category: "basis_invalid",
+							issue: "distinct_candidate_missing_non_source_candidate",
+						});
 						return [validProposal];
 					},
 				},
@@ -544,7 +662,35 @@ test("coordinator rejects a run without the current worker protocol before captu
 					},
 				},
 			}),
-		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v2");
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v3");
+		expect(nextCalled).toBeFalse();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("coordinator keeps historical v2 runs readable but refuses to resume them", async () => {
+	const runId = `work-historical-v2-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+			workerProtocol: HistoricalLunaWorkerProtocolV2,
+		});
+		expect(config.workerProtocol).toEqual(HistoricalLunaWorkerProtocolV2);
+		let nextCalled = false;
+		await expect(
+			runConcurrentReconciliation(config, {
+				dependencies: {
+					next: async () => {
+						nextCalled = true;
+						return [];
+					},
+				},
+			}),
+		).rejects.toThrow("initialize a fresh full run with --worker-protocol full-online-luna-v3");
 		expect(nextCalled).toBeFalse();
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -623,7 +769,10 @@ test("failed worker drains in-flight work without recording and releases the coo
 		const events = await Bun.file(join(directory, "events.jsonl")).text();
 		expect(events).toContain('"event":"work.failed"');
 		expect(events).toContain('"failureCode":"worker_attempts_exhausted"');
+		expect(events).toContain('"feedbackCategory":"decision_validation_invalid"');
+		expect(events).toContain('"feedbackIssue":"decision_contract"');
 		expect(events).not.toContain("fixture failure");
+		for (const source of sources) expect(events).not.toContain(source.id);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

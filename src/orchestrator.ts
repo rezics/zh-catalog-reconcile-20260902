@@ -24,13 +24,17 @@ import {
 import {
 	CodexLunaDecisionWorker,
 	type DecisionWorker,
-	type DecisionWorkerFeedbackCode,
 	type DecisionWorkItem,
 	LunaModel,
 	LunaPromptRevision,
 	LunaWorkerFailure,
 } from "./model-worker.ts";
 import { readPacketCheckpoint } from "./packets.ts";
+import {
+	type DecisionWorkerFeedback,
+	DecisionWorkerValidationError,
+	workerValidationError,
+} from "./worker-feedback.ts";
 
 export const WorkDefaults = {
 	concurrency: 32,
@@ -158,24 +162,29 @@ function proposalDecision(
 	return decision;
 }
 
-export function classifyDecisionWorkerFeedback(error: unknown): DecisionWorkerFeedbackCode {
-	if (error instanceof SyntaxError || error instanceof TypeError) return "output_schema_invalid";
-	if (error && typeof error === "object" && "issues" in error) return "output_schema_invalid";
-	const message = error instanceof Error ? error.message : "";
-	if (/Worker (assignment|returned|omitted)/u.test(message)) return "assignment_invalid";
-	if (/Keep requires|Merge requires|Soft-delete reason|Revision reason/iu.test(message))
-		return "disposition_evidence_invalid";
-	if (/^Basis\b|\bbasis\b/iu.test(message)) return "basis_invalid";
-	if (/^Uncertainty\b|\buncertainty\b|candidate ambiguity/iu.test(message))
-		return "uncertainty_invalid";
-	if (/citation|evidence outside|packet field/iu.test(message)) return "citation_invalid";
-	return "decision_validation_invalid";
+export function classifyDecisionWorkerFeedback(error: unknown): DecisionWorkerFeedback {
+	if (error instanceof DecisionWorkerValidationError) return error.feedback;
+	if (error instanceof SyntaxError || error instanceof TypeError)
+		return { category: "output_schema_invalid", issue: "output_schema_contract" };
+	if (error && typeof error === "object" && "issues" in error)
+		return { category: "output_schema_invalid", issue: "output_schema_contract" };
+	return { category: "decision_validation_invalid", issue: "decision_contract" };
+}
+
+export class DecisionWorkerAttemptsExhaustedError extends Error {
+	readonly feedback: DecisionWorkerFeedback | undefined;
+
+	constructor(maxAttempts: number, feedback: DecisionWorkerFeedback | undefined, cause: unknown) {
+		const suffix = feedback === undefined ? "" : ` (${feedback.category}:${feedback.issue})`;
+		super(`Luna worker failed after ${maxAttempts} attempts${suffix}`, { cause });
+		this.name = "DecisionWorkerAttemptsExhaustedError";
+		this.feedback = feedback;
+	}
 }
 
 function workFailureCode(error: unknown): string {
 	if (error instanceof LunaWorkerFailure) return `luna_${error.category}`;
-	if (error instanceof Error && error.message.startsWith("Luna worker failed after"))
-		return "worker_attempts_exhausted";
+	if (error instanceof DecisionWorkerAttemptsExhaustedError) return "worker_attempts_exhausted";
 	return "coordinator_error";
 }
 
@@ -188,21 +197,38 @@ export function compileDecisionProposals(
 	for (const item of items)
 		for (const sourceUnitId of item.undecidedSourceUnitIds) {
 			if (packetsBySource.has(sourceUnitId))
-				throw new Error(`Worker assignment repeats source ${sourceUnitId}`);
+				throw workerValidationError(
+					"Worker assignment repeats a source",
+					"assignment_invalid",
+					"assignment_contract",
+				);
 			packetsBySource.set(sourceUnitId, item.packet);
 		}
 	const proposalsBySource = new Map<string, DecisionProposal>();
 	for (const proposal of proposals) {
 		if (!packetsBySource.has(proposal.sourceUnitId))
-			throw new Error(`Worker returned unassigned source ${proposal.sourceUnitId}`);
+			throw workerValidationError(
+				"Worker returned an unassigned source",
+				"assignment_invalid",
+				"assignment_contract",
+			);
 		if (proposalsBySource.has(proposal.sourceUnitId))
-			throw new Error(`Worker returned duplicate source ${proposal.sourceUnitId}`);
+			throw workerValidationError(
+				"Worker returned a duplicate source",
+				"assignment_invalid",
+				"assignment_contract",
+			);
 		proposalsBySource.set(proposal.sourceUnitId, proposal);
 	}
 	const decisions: SourceDecision[] = [];
 	for (const [sourceUnitId, packet] of packetsBySource) {
 		const proposal = proposalsBySource.get(sourceUnitId);
-		if (!proposal) throw new Error(`Worker omitted assigned source ${sourceUnitId}`);
+		if (!proposal)
+			throw workerValidationError(
+				"Worker omitted an assigned source",
+				"assignment_invalid",
+				"assignment_contract",
+			);
 		decisions.push(proposalDecision(config, packet, proposal));
 	}
 	return decisions;
@@ -223,7 +249,7 @@ async function decideWithRetry(
 	signal?: AbortSignal,
 ): Promise<{ readonly decisions: SourceDecision[]; readonly retries: number }> {
 	let lastError: unknown;
-	let feedback: DecisionWorkerFeedbackCode | undefined;
+	let feedback: DecisionWorkerFeedback | undefined;
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		if (signal?.aborted) throw signal.reason ?? new Error("Reconciliation interrupted");
 		try {
@@ -255,10 +281,7 @@ async function decideWithRetry(
 				);
 		}
 	}
-	const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
-	throw new Error(`Luna worker failed after ${maxAttempts} attempts${detail}`, {
-		cause: lastError,
-	});
+	throw new DecisionWorkerAttemptsExhaustedError(maxAttempts, feedback, lastError);
 }
 
 async function concurrently<T, R>(
@@ -376,6 +399,13 @@ export async function runConcurrentReconciliation(
 						failureCode: workFailureCode(error),
 						part: pending[0]?.packet.part ?? null,
 						requestCount: batches.length,
+						...(error instanceof DecisionWorkerAttemptsExhaustedError &&
+						error.feedback !== undefined
+							? {
+									feedbackCategory: error.feedback.category,
+									feedbackIssue: error.feedback.issue,
+								}
+							: {}),
 					},
 					"error",
 				);

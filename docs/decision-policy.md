@@ -95,6 +95,11 @@ role and field type required by that code, and every citation must be used. In p
 - `review` uses typed `uncertainties` linked to source and related-candidate citations instead of
   basis entries.
 
+`distinct_candidate_evidence` is an optional `keep` basis, not a routine keep requirement. Use it
+only when stored identity evidence supports a distinct-work comparison. Its claim-local citations
+must include the source Unit and at least one packet candidate with a different Unit ID. Both must
+use identity-evidence fields accepted by the runtime contract.
+
 Do not output `explanation` or top-level `evidenceUnitIds`. A concise `note` is required only for
 an explicit `other` reason or uncertainty and is rejected otherwise. Historical v1/v2
 explanations remain readable; repeated text or templates that merely substitute evidence values

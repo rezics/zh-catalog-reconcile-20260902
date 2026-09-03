@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
 	type BookEvidence,
 	BookEvidenceSchema,
 	CurrentDecisionPolicyRevision,
+	DecisionBasisCodeSchema,
+	DecisionUncertaintyKindSchema,
 	type RunConfig,
 	RunConfigSchema,
 	SchemaVersion,
@@ -11,12 +15,23 @@ import {
 } from "../src/contracts.ts";
 import { isExactZhSource } from "../src/database.ts";
 import { sha256 } from "../src/hash.ts";
+import { repositoryRoot } from "../src/io.ts";
 import { buildReviewPacket } from "../src/packets.ts";
 import { compileDecision } from "../src/planner.ts";
 
 const SourceId = "019fe73e-8927-701e-becf-64aee50c9594";
 const TargetId = "019fe546-26fb-7cac-9225-70ffa348df8a";
 const ActorEntityId = "019fe714-d85f-7f35-aeb4-cdcd44edcb6b";
+
+test("decision template covers every basis and uncertainty code", async () => {
+	const template = await readFile(
+		join(repositoryRoot, "references", "decision-template.md"),
+		"utf8",
+	);
+	for (const code of DecisionBasisCodeSchema.options) expect(template).toContain(`\`${code}\``);
+	for (const kind of DecisionUncertaintyKindSchema.options)
+		expect(template).toContain(`\`${kind}\``);
+});
 
 function book(id: string, languages: readonly string[], title = "斗破苍穹萧炎"): BookEvidence {
 	const evidence = {
@@ -179,7 +194,9 @@ describe("decision compilation", () => {
 				{ code: "same_attribution", citationIndexes: [1] },
 			],
 		});
-		expect(() => compileDecision(config, packet, sourceOnlyCitation)).toThrow("must cite Unit");
+		expect(() => compileDecision(config, packet, sourceOnlyCitation)).toThrow(
+			"must cite the target Unit",
+		);
 	});
 
 	test("rejects a merge target absent from the packet", () => {

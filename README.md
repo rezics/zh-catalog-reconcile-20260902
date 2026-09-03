@@ -47,7 +47,8 @@ The `work` command is the full-corpus inference path. One coordinator owns produ
 recording while bounded ephemeral Codex workers run `gpt-5.6-luna` concurrently. Workers return
 typed proposals with citations nested in their basis or uncertainty; the coordinator supplies
 packet identity and actor fields, derives the persisted citation indexes, validates every proposal,
-and records the part. A keep proposal's unique equal-length source-title transcription may be
+and records the part. An exhausted semantic part is deferred while independent parts continue, so
+one long-tail item does not drain and restart the bounded pipeline. A keep proposal's unique equal-length source-title transcription may be
 restored to the stored title before the same validator runs. Long matching synopsis evidence and
 query-title contradictions retain their typed validation rules. A merge target typo is restored
 only from one uniquely cited packet candidate. Invalid redundant basis claims are omitted only

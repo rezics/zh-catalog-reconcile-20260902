@@ -153,6 +153,8 @@ different character. Omit an invalid redundant basis only
 when a remaining non-empty basis subset passes the complete validator. Workers use ChatGPT login with standard
 (non-Fast) service and never redeem an
 account reset. Exhausted allowance is a resumable stop requiring operator action.
+An exhausted semantic part remains an append-only hole while independent parts continue; report
+the original failure after the rest of the fixed online corpus is persisted.
 `work` rejects a run that is not pinned to the current worker protocol before it captures or
 decides another packet.
 

@@ -883,6 +883,7 @@ async function runPipelinedReconciliation(
 	let workerRetries = 0;
 	let nextProgress = (Math.floor(decisionCount / progressEvery) + 1) * progressEvery;
 	const active = new Map<number, Promise<PipelinedPartResult>>();
+	let deferredFailure: { readonly part: number; readonly error: unknown } | undefined;
 
 	for (;;) {
 		if (options.signal?.aborted)
@@ -919,6 +920,25 @@ async function runPipelinedReconciliation(
 		);
 		active.delete(settled.part);
 		if (settled.error !== undefined) {
+			if (settled.error instanceof DecisionWorkerAttemptsExhaustedError) {
+				deferredFailure ??= { part: settled.part, error: settled.error };
+				await appendRunEvent(
+					config.runId,
+					"work.part_deferred",
+					{
+						failureCode: workFailureCode(settled.error),
+						part: settled.part,
+						...(settled.error.feedback === undefined
+							? {}
+							: {
+									feedbackCategory: settled.error.feedback.category,
+									feedbackIssue: settled.error.feedback.issue,
+								}),
+					},
+					"warning",
+				);
+				continue;
+			}
 			await Promise.allSettled(active.values());
 			await appendRunEvent(
 				config.runId,
@@ -958,6 +978,15 @@ async function runPipelinedReconciliation(
 			await appendRunEvent(config.runId, "work.progress", progress);
 			while (nextProgress <= decisionCount) nextProgress += progressEvery;
 		}
+	}
+	if (deferredFailure !== undefined) {
+		await appendRunEvent(
+			config.runId,
+			"work.failed",
+			{ failureCode: workFailureCode(deferredFailure.error), part: deferredFailure.part },
+			"error",
+		);
+		throw deferredFailure.error;
 	}
 
 	const pending = await nextPackets(config, config.onlineBatchSize);

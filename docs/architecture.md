@@ -62,6 +62,8 @@ A `same_synopsis` citation of at least 64 normalized characters may be restored 
 same-field stored value only when exactly one character differs.
 If one redundant basis is invalid, the coordinator searches bounded non-empty basis subsets and
 retains a subset only when the complete validator accepts the resulting unchanged disposition.
+If a semantic part still exhausts its attempts, its successful decisions remain appended and the
+part is deferred while independent parts continue; the original failure is emitted at corpus end.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

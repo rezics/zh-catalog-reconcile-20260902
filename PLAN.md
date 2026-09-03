@@ -253,6 +253,8 @@ packet and exact citation excerpts for audit.
 
 Validated decisions completed before another worker in the same part exhausts retries are appended
 before the run fails, so a resume does not recompute successful semantic work.
+An exhausted semantic part is deferred while independent parts continue through the fixed online
+corpus; the coordinator reports the original failure after all other active work is persisted.
 For citation-only model transcription failures, the coordinator may restore the source's unique
 equal-length stored title selected by a keep proposal's `booklike_title` claim and propagate that
 exact substitution within the same proposal; other title citations require a unique one-character

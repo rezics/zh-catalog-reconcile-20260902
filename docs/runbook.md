@@ -130,6 +130,8 @@ For `same_synopsis`, it may restore an excerpt of at least 64 normalized charact
 unique same-field stored value with exactly one differing character.
 It may omit invalid redundant basis claims only when the remaining non-empty subset independently
 passes the complete decision validator.
+An exhausted semantic part is left as an append-only hole while independent parts continue, then
+the original failure is reported after the rest of the fixed corpus is persisted.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.
 Historical `full-online-luna-v2`, `full-online-luna-v3`, `full-online-luna-v4`, and
 `full-online-luna-v5` runs remain

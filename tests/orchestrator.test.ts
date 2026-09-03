@@ -1614,6 +1614,88 @@ test("pipeline triages routine keeps and sends only fallback sources to the full
 	}
 });
 
+test("pipeline defers an exhausted part and continues beyond the active window", async () => {
+	const runId = `work-deferred-part-${randomUUID()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const sources = Array.from({ length: 17 }, (_, index) =>
+			sourceBook(randomUUID(), `延后作品${index}`),
+		).sort((left, right) => left.id.localeCompare(right.id));
+		for (const [part, source] of sources.entries())
+			await writeJsonLinesAtomic(join(directory, "packets", partFileName(part)), [
+				buildReviewPacket(config, part, source.localizations[0]?.title ?? source.id, [source], []),
+			]);
+		const lastSource = sources.at(-1);
+		if (!lastSource) throw new Error("Fixture source missing");
+		await writeJsonAtomic(
+			join(directory, "packets", "checkpoint.json"),
+			PacketCheckpointSchema.parse({
+				schemaVersion: SchemaVersion,
+				runId,
+				evidenceMode: "online-batched",
+				lastSourceCreatedAt: lastSource.createdAt,
+				lastSourceUnitId: lastSource.id,
+				sourceCount: sources.length,
+				packetCount: sources.length,
+				nextPart: sources.length,
+				complete: true,
+				updatedAt: nowIso(),
+			}),
+		);
+		await expect(
+			runConcurrentReconciliation(config, {
+				usePipeline: true,
+				concurrency: 2,
+				maxAttempts: 1,
+				dependencies: {
+					triage: {
+						async decide(items) {
+							return items.flatMap(({ undecidedSourceUnitIds }) =>
+								undecidedSourceUnitIds.map((sourceUnitId) => ({
+									sourceUnitId,
+									confidence: "low" as const,
+									disposition: "review" as const,
+									reason: "insufficient_evidence" as const,
+									targetUnitId: null,
+								})),
+							);
+						},
+					},
+					worker: {
+						async decide(items) {
+							if (items[0]?.packet.part === 0) throw new Error("fixture exhausted part");
+							return items.map(({ packet }) => {
+								const source = packet.candidates[0];
+								if (!source) throw new Error("Fixture source missing");
+								return proposal(source);
+							});
+						},
+					},
+				},
+			}),
+		).rejects.toThrow("Luna worker failed after 1 attempts");
+		expect(await pathExists(join(directory, "decisions", partFileName(16)))).toBeTrue();
+		let decisionCount = 0;
+		for (let part = 0; part < sources.length; part += 1) {
+			const path = join(directory, "decisions", partFileName(part));
+			if (!(await pathExists(path))) continue;
+			for await (const _decision of readJsonLines(path, SourceDecisionSchema)) decisionCount += 1;
+		}
+		expect(decisionCount).toBe(16);
+		const events = await Bun.file(join(directory, "events.jsonl")).text();
+		expect(events).toContain('"event":"work.part_deferred"');
+		expect(events).toContain('"part":0');
+		expect(events).not.toContain("fixture exhausted part");
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("default 128-by-4 workers persist a 64-source part and odd tail then resume without duplication", async () => {
 	const runId = `work-defaults-${randomUUID()}`;
 	const directory = runDirectory(runId);

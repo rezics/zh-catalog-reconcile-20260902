@@ -126,6 +126,8 @@ duplicate proof and permits a
 non-Book uncertainty to cite contradictory source Book evidence.
 It ignores formatting whitespace in citation excerpts and restores an out-of-packet merge target
 only from exactly one non-source candidate cited by the proposal.
+For `same_synopsis`, it may restore an excerpt of at least 64 normalized characters only to a
+unique same-field stored value with exactly one differing character.
 It may omit invalid redundant basis claims only when the remaining non-empty subset independently
 passes the complete decision validator.
 Retries receive bounded typed feedback categories and issue codes, never raw evidence or Unit IDs.

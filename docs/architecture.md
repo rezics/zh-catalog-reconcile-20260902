@@ -58,6 +58,8 @@ evidence instead of discarding it to satisfy the output shape.
 Citation comparison ignores formatting whitespace. An out-of-packet merge target transcription is
 replaced only when the proposal's non-source basis citations identify exactly one packet candidate,
 after which the ordinary binding and claim validation still applies.
+A `same_synopsis` citation of at least 64 normalized characters may be restored to a unique
+same-field stored value only when exactly one character differs.
 If one redundant basis is invalid, the coordinator searches bounded non-empty basis subsets and
 retains a subset only when the complete validator accepts the resulting unchanged disposition.
 

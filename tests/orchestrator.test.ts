@@ -537,6 +537,83 @@ test("matching synopsis and attribution can prove a merge when stored titles dif
 	}
 });
 
+test("proposal compilation restores a one-character long-synopsis transcription", async () => {
+	const runId = `proposal-synopsis-transcription-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const common = "相同的完整长篇故事简介证明两个记录描述同一作品。".repeat(4);
+		const withSynopsisAndAuthor = (book: BookEvidence, suffix: string): BookEvidence => {
+			const { evidenceHash: _evidenceHash, ...withoutHash } = book;
+			const unhashed = {
+				...withoutHash,
+				localizations: book.localizations.map((localization) => ({
+					...localization,
+					summary: `${common}${suffix}`,
+				})),
+				attributions: [
+					{
+						id: randomUUID(),
+						role: "author",
+						creditedUnitId: randomUUID(),
+						creditedUnitKind: "entity" as const,
+						entityKind: "person" as const,
+						entityVerified: false,
+						localizations: [{ language: "zh", title: "同一作者", summary: null }],
+					},
+				],
+			};
+			return BookEvidenceSchema.parse({ ...unhashed, evidenceHash: sha256(unhashed) });
+		};
+		const source = withSynopsisAndAuthor(sourceBook(randomUUID(), "原名"), "1");
+		const target = withSynopsisAndAuthor(sourceBook(randomUUID(), "不同标题"), "2");
+		const packet = buildReviewPacket(config, 0, "原名", [source], [target]);
+		const sourceSynopsis = `${common}1`;
+		const proposalWithTranscription: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: target.id,
+			basis: [
+				{
+					code: "same_synopsis",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "localization_summary" as const,
+						excerpt: sourceSynopsis,
+					})),
+				},
+				{
+					code: "same_attribution",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "attribution" as const,
+						excerpt: "同一作者",
+					})),
+				},
+			],
+		};
+		const [decision] = compileDecisionProposals(
+			config,
+			[{ packet, undecidedSourceUnitIds: [source.id] }],
+			[proposalWithTranscription],
+		);
+		expect(
+			decision?.citations.some(
+				({ unitId, excerpt }) => unitId === target.id && excerpt === `${common}2`,
+			),
+		).toBeTrue();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("a strongly matching long synopsis can prove a merge when stored titles differ", async () => {
 	const runId = `proposal-long-synopsis-merge-${Date.now()}`;
 	const directory = runDirectory(runId);

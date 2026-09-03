@@ -102,6 +102,8 @@ shows why a query-like title cannot safely determine Book status.
 Whitespace inserted by stored formatting is ignored for citation matching. A merge target outside
 the packet may be restored only when its basis citations name exactly one non-source packet
 candidate; ordinary merge-target and claim validation still runs afterward.
+A `same_synopsis` citation of at least 64 normalized characters may be restored only to a unique
+same-field stored value with exactly one different character.
 An invalid redundant basis may be omitted only when a remaining non-empty basis subset passes the
 complete disposition, Unit-role, field, citation, and patch validation contract.
 

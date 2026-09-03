@@ -145,9 +145,11 @@ question-shaped title is not a query merely because it contains punctuation. Res
 command after an operator interruption; do not resume a run whose decisions use another model or
 prompt revision. A keep proposal's unique equal-length source title may be restored from stored
 evidence and its exact substitution propagated within the proposal; other title repairs require a
-unique one-character near match. Do not repair other fields or ambiguous titles. Use
+unique one-character near match. Do not repair other title fields or ambiguous titles. Use
 whitespace-insensitive citation matching. An out-of-packet merge target may be restored only from
-exactly one non-source packet candidate cited by its basis. Omit an invalid redundant basis only
+exactly one non-source packet candidate cited by its basis. A `same_synopsis` citation of at least
+64 normalized characters may be restored only to a unique same-field stored value with exactly one
+different character. Omit an invalid redundant basis only
 when a remaining non-empty basis subset passes the complete validator. Workers use ChatGPT login with standard
 (non-Fast) service and never redeem an
 account reset. Exhausted allowance is a resumable stop requiring operator action.

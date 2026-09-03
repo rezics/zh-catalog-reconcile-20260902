@@ -261,6 +261,8 @@ may support `title_variant_same_work` only when it explicitly states the alterna
 Citation matching ignores formatting whitespace but not other content. When a model transcribes a
 merge target outside the packet, the coordinator may restore it only when all non-source basis
 citations identify exactly one packet candidate; the repaired proposal then passes normal binding.
+For a `same_synopsis` claim, a citation of at least 64 normalized characters may be restored only
+to one unique same-field stored value that differs by exactly one character.
 If a proposal contains an invalid redundant basis, the coordinator may omit it only when a
 remaining non-empty basis subset independently passes every disposition and citation validator.
 

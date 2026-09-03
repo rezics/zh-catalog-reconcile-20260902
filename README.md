@@ -51,7 +51,8 @@ and records the part. A keep proposal's unique equal-length source-title transcr
 restored to the stored title before the same validator runs. Long matching synopsis evidence and
 query-title contradictions retain their typed validation rules. A merge target typo is restored
 only from one uniquely cited packet candidate. Invalid redundant basis claims are omitted only
-when the remaining basis independently validates. Total work is not count-limited.
+when the remaining basis independently validates. A long `same_synopsis` citation may be restored
+only to a unique same-field stored value differing by one character. Total work is not count-limited.
 
 ## Repository roles
 

@@ -161,6 +161,33 @@ function repairNearMissTitleCitation(
 	return replacement === undefined ? citation : { ...citation, excerpt: replacement };
 }
 
+function repairNearMissSynopsisCitation(
+	packet: ReviewPacket,
+	citation: DecisionEvidenceCitation,
+): DecisionEvidenceCitation {
+	if (citation.field !== "localization_summary" && citation.field !== "localization_description")
+		return citation;
+	const book = packet.candidates.find(({ id }) => id === citation.unitId);
+	if (!book) return citation;
+	const excerpt = normalizedCitationText(citation.excerpt);
+	if ([...excerpt].length < 64) return citation;
+	const values = book.localizations.flatMap(({ summary, description }) =>
+		citation.field === "localization_summary"
+			? summary === null
+				? []
+				: [summary]
+			: description === null
+				? []
+				: jsonTextValues(description),
+	);
+	if (values.some((value) => normalizedCitationText(value).includes(excerpt))) return citation;
+	const nearMatches = values.filter((value) =>
+		differsByOneCharacter(normalizedCitationText(value), excerpt),
+	);
+	const replacement = nearMatches.length === 1 ? nearMatches[0] : undefined;
+	return replacement === undefined ? citation : { ...citation, excerpt: replacement };
+}
+
 function repairNearMissTitleCitations(
 	packet: ReviewPacket,
 	proposal: DecisionProposal,
@@ -203,9 +230,12 @@ function repairNearMissTitleCitations(
 		...proposal,
 		basis: proposal.basis.map((basis) => ({
 			...basis,
-			citations: basis.citations.map((citation) =>
-				repairNearMissTitleCitation(packet, citation, transforms),
-			),
+			citations: basis.citations.map((citation) => {
+				const repairedTitle = repairNearMissTitleCitation(packet, citation, transforms);
+				return basis.code === "same_synopsis"
+					? repairNearMissSynopsisCitation(packet, repairedTitle)
+					: repairedTitle;
+			}),
 		})),
 	};
 }

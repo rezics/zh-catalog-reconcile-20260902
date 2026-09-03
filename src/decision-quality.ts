@@ -36,6 +36,7 @@ import { workerValidationError } from "./worker-feedback.ts";
 const MaximumSampleIssues = 100;
 const BlanketReviewMinimum = 10;
 const DuplicateExplanationMinimum = 3;
+const StrongSynopsisMinimumCharacters = 80;
 const IdentityEvidenceFields = new Set<DecisionEvidenceCitation["field"]>(
 	IdentityEvidenceFieldValues,
 );
@@ -58,6 +59,24 @@ function revisionEvidenceField(patch: RevisionPatch): DecisionEvidenceCitation["
 			return "book_word_count";
 		case "credit_replacement":
 			return "attribution";
+	}
+}
+
+function revisionPatchValues(patch: RevisionPatch): string[] {
+	switch (patch.kind) {
+		case "localization_text_field":
+			return patch.value === null ? [] : [patch.value];
+		case "localization_description":
+			return jsonStrings(patch.value);
+		case "book_release_status":
+		case "book_isbn13":
+		case "book_publication_date":
+			return patch.value === null ? [] : [patch.value];
+		case "book_page_count":
+		case "book_word_count":
+			return patch.value === null ? [] : [String(patch.value)];
+		case "credit_replacement":
+			return [patch.creditedUnitId];
 	}
 }
 
@@ -401,13 +420,38 @@ function validateBasis(
 		const synopsisSupported = codes.has("same_synopsis");
 		const attributionSupported = codes.has("same_attribution");
 		const corroborated = synopsisSupported || attributionSupported;
+		const stronglyMatchingSynopsis = decision.basis
+			.filter(({ code }) => code === "same_synopsis")
+			.some(({ citationIndexes }) => {
+				const cited = citationIndexes.flatMap((index) => {
+					const citation = decision.citations[index];
+					return citation === undefined ? [] : [citation];
+				});
+				const sourceExcerpts = cited
+					.filter(({ unitId }) => unitId === decision.sourceUnitId)
+					.map(({ excerpt }) => normalizedText(excerpt));
+				const targetExcerpts = cited
+					.filter(({ unitId }) => unitId === decision.targetUnitId)
+					.map(({ excerpt }) => normalizedText(excerpt));
+				return sourceExcerpts.some((sourceExcerpt) =>
+					targetExcerpts.some((targetExcerpt) => {
+						const shorter =
+							sourceExcerpt.length <= targetExcerpt.length ? sourceExcerpt : targetExcerpt;
+						const longer = shorter === sourceExcerpt ? targetExcerpt : sourceExcerpt;
+						return (
+							[...shorter].length >= StrongSynopsisMinimumCharacters && longer.includes(shorter)
+						);
+					}),
+				);
+			});
 		if (
 			!codes.has("same_identifier") &&
+			!stronglyMatchingSynopsis &&
 			!(synopsisSupported && attributionSupported) &&
 			!(titleSupported && corroborated)
 		)
 			dispositionEvidenceError(
-				"Merge requires a shared identifier, matching synopsis and attribution, or title correspondence plus synopsis/attribution corroboration",
+				"Merge requires a shared identifier, a strongly matching long synopsis, matching synopsis and attribution, or title correspondence plus synopsis/attribution corroboration",
 			);
 	}
 	if (decision.disposition === "soft_delete") {
@@ -438,12 +482,18 @@ function validateBasis(
 			dispositionEvidenceError(`Revision reason ${decision.reason} lacks its required basis`);
 		for (const patch of decision.patches) {
 			const field = revisionEvidenceField(patch);
+			const values = revisionPatchValues(patch).map(normalizedText);
 			if (
 				!decision.citations.some(
-					(citation) => citation.field === field && patch.evidenceUnitIds.includes(citation.unitId),
+					(citation) =>
+						patch.evidenceUnitIds.includes(citation.unitId) &&
+						(citation.field === field ||
+							values.some((value) => normalizedText(citation.excerpt).includes(value))),
 				)
 			)
-				dispositionEvidenceError(`Revision patch ${patch.kind} lacks a linked ${field} citation`);
+				dispositionEvidenceError(
+					`Revision patch ${patch.kind} lacks a linked ${field} or replacement-value citation`,
+				);
 		}
 	}
 }
@@ -491,11 +541,10 @@ function validateUncertainties(
 			uncertainty.kind === "non_book_status_unclear" &&
 			!citations.every(
 				(citation) =>
-					citation.unitId === decision.sourceUnitId &&
-					(citation.field === "localization_title" || citation.field === "suspicious_signal"),
+					citation.unitId === decision.sourceUnitId && IdentityEvidenceFields.has(citation.field),
 			)
 		)
-			uncertaintyError("Non-Book uncertainty must cite the source title or suspicious signal");
+			uncertaintyError("Non-Book uncertainty accepts source identity evidence only");
 	}
 }
 

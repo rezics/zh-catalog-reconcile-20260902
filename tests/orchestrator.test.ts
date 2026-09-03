@@ -423,6 +423,163 @@ test("matching synopsis and attribution can prove a merge when stored titles dif
 	}
 });
 
+test("a strongly matching long synopsis can prove a merge when stored titles differ", async () => {
+	const runId = `proposal-long-synopsis-merge-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const synopsis = "相同的完整长篇故事简介证明两个记录描述同一作品。".repeat(5);
+		const withSynopsis = (book: BookEvidence): BookEvidence => {
+			const { evidenceHash: _evidenceHash, ...withoutHash } = book;
+			const unhashed = {
+				...withoutHash,
+				localizations: book.localizations.map((localization) => ({
+					...localization,
+					summary: synopsis,
+				})),
+			};
+			return BookEvidenceSchema.parse({ ...unhashed, evidenceHash: sha256(unhashed) });
+		};
+		const source = withSynopsis(sourceBook(randomUUID(), "原名"));
+		const target = withSynopsis(sourceBook(randomUUID(), "不同标题"));
+		const packet = buildReviewPacket(config, 0, "原名", [source], [target]);
+		const mergeProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "merge",
+			reason: "duplicate_identity",
+			targetUnitId: target.id,
+			basis: [
+				{
+					code: "same_synopsis",
+					citations: [source, target].map((book) => ({
+						unitId: book.id,
+						field: "localization_summary" as const,
+						excerpt: synopsis,
+					})),
+				},
+			],
+		};
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[mergeProposal],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("review uncertainty may cite source Book evidence that contradicts a query-like title", async () => {
+	const runId = `proposal-query-review-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const source = sourceBook(randomUUID(), "这本小说叫什么名字");
+		const packet = buildReviewPacket(config, 0, "这本小说叫什么名字", [source], []);
+		const title = source.localizations[0]?.title;
+		const summary = source.localizations[0]?.summary;
+		if (!title || !summary) throw new Error("Fixture metadata is missing");
+		const reviewProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "medium",
+			note: null,
+			disposition: "review",
+			reason: "insufficient_evidence",
+			uncertainties: [
+				{
+					kind: "non_book_status_unclear",
+					relatedUnitIds: [],
+					citations: [
+						{ unitId: source.id, field: "localization_title", excerpt: title },
+						{ unitId: source.id, field: "localization_summary", excerpt: summary },
+					],
+				},
+			],
+		};
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[reviewProposal],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("revision replacement value may be proven by another stored identity field", async () => {
+	const runId = `proposal-revision-value-${Date.now()}`;
+	const directory = runDirectory(runId);
+	try {
+		const config = await initializeWorkerRun({
+			runId,
+			rezicsRef: "v1.7.0",
+			cutoff: "2026-09-02T16:00:00.000Z",
+		});
+		const fixture = sourceBook(randomUUID(), "主角小说叫什么名字");
+		const { evidenceHash: _evidenceHash, ...withoutHash } = fixture;
+		const unhashed = {
+			...withoutHash,
+			localizations: fixture.localizations.map((localization) => ({
+				...localization,
+				summary: "这部作品的正确书名是《真正书名》。",
+			})),
+		};
+		const source = BookEvidenceSchema.parse({ ...unhashed, evidenceHash: sha256(unhashed) });
+		const packet = buildReviewPacket(config, 0, "主角小说叫什么名字", [source], []);
+		const revisionProposal: DecisionProposal = {
+			sourceUnitId: source.id,
+			confidence: "high",
+			note: null,
+			disposition: "revise",
+			reason: "wrong_metadata",
+			basis: [
+				{
+					code: "metadata_correction_supported",
+					citations: [
+						{
+							unitId: source.id,
+							field: "localization_summary",
+							excerpt: "正确书名是《真正书名》",
+						},
+					],
+				},
+			],
+			patches: [
+				{
+					kind: "localization_text_field",
+					language: "zh",
+					field: "title",
+					value: "真正书名",
+					evidenceUnitIds: [source.id],
+				},
+			],
+		};
+		expect(
+			compileDecisionProposals(
+				config,
+				[{ packet, undecidedSourceUnitIds: [source.id] }],
+				[revisionProposal],
+			),
+		).toHaveLength(1);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("title variants may cite stored synopsis text that explicitly states the alternate title", async () => {
 	const runId = `proposal-title-variant-synopsis-${Date.now()}`;
 	const directory = runDirectory(runId);

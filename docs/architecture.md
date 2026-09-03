@@ -51,6 +51,10 @@ stored source title selected by `booklike_title` and propagate the exact substit
 citations in that proposal; other title citations require a unique one-character near match. It
 then runs the unchanged validator. Stored synopsis text may support a title-variant claim only
 when the text itself states the alternate title.
+Duplicate validation also accepts an exact long synopsis match, or matching synopsis and
+attribution, when titles differ. Revision values may be linked to a stored identity excerpt that
+contains the replacement value, and non-Book uncertainty may retain contradictory source Book
+evidence instead of discarding it to satisfy the output shape.
 
 The runner never exports all Books. It uses the live REZICS database throughout the entire task,
 not only during a rehearsal. A fixed creation cutoff keeps the source population bounded, while

@@ -150,8 +150,8 @@ Quality gates:
 - every decision cites exact stored packet evidence;
 - every routine action uses typed English basis codes, each linked to compatible citations;
 - every `keep` cites a Book-like title plus synopsis, attribution, or identifier corroboration;
-- every `merge` cites a shared identifier, matching synopsis and attribution, or title
-  correspondence plus synopsis or attribution;
+- every `merge` cites a shared identifier, a strongly matching long synopsis, matching synopsis
+  and attribution, or title correspondence plus synopsis or attribution;
 - every `review` records typed uncertainties linked to source and related-candidate citations;
 - free-form notes occur only for an explicit `other` reason or uncertainty;
 - legacy repeated or evidence-substituted explanation templates: 0;

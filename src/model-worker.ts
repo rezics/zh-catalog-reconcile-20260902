@@ -57,7 +57,7 @@ const RetryIssueGuidance: Readonly<Record<DecisionWorkerFeedbackIssue, string>> 
 		"Recheck packet membership, field names, exact excerpts, and claim-local placement.",
 	decision_contract: "Recheck the full decision against the supplied packet and output contract.",
 	disposition_evidence_contract:
-		"Supply every required basis for the chosen disposition without changing the semantic result just to pass validation.",
+		"Supply every required basis for the chosen disposition and link each revision patch to either the changed field or stored evidence containing its replacement value, without changing the semantic result just to pass validation.",
 	distinct_candidate_missing_non_source_candidate:
 		"For distinct_candidate_evidence, include at least one citation whose Unit ID is a packet candidate different from sourceUnitId.",
 	distinct_candidate_missing_source:
@@ -127,8 +127,9 @@ Book (soft_delete), a real Book with a stored-evidence correction (revise), or u
 contradictory evidence semantically. Never classify from punctuation, keywords, description
 length, title similarity, or author equality alone. A question-shaped title with coherent Book
 synopsis or authorship is not a search query merely because it contains a question mark. Merge
-only when the stored evidence proves the same work. Matching synopsis and attribution can prove
-identity even when stored titles differ. Prefer review over an invented fact.
+only when the stored evidence proves the same work. An exact long synopsis match, or matching
+synopsis and attribution, can prove identity even when stored titles differ. Prefer review over
+an invented fact.
 Do not use review for unread packets, time limits, output-generation failures, or missing tools;
 those are worker failures, not catalog decisions.
 
@@ -138,7 +139,8 @@ output citationIndexes; the coordinator derives the persisted indexes mechanical
 uncertainty needs its own supporting citations. Keep requires booklike_title plus synopsis,
 attribution, or identifier corroboration. Review uses uncertainties. Set note to null for routine
 decisions; use a concise note only with an explicit other reason or uncertainty. Do not output
-explanations.
+explanations. A revision patch must cite either its changed field or a stored identity excerpt that
+contains the replacement value.
 
 Every basis must satisfy this deterministic claim contract:
 ${renderBasisClaimContract()}${retryInstruction}

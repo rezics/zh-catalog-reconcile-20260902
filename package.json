@@ -1,0 +1,29 @@
+{
+	"name": "@rezics/zh-catalog-reconcile-20260902",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-only",
+	"packageManager": "bun@1.4.0",
+	"engines": {
+		"bun": ">=1.4.0"
+	},
+	"scripts": {
+		"reconcile": "bun run src/cli.ts",
+		"generate:schemas": "bun run src/generate-schemas.ts",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"test": "bun test",
+		"check": "bun run generate:schemas && bun run typecheck && bun run lint && bun test"
+	},
+	"dependencies": {
+		"postgres": "3.4.9",
+		"zod": "4.5.4"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.11",
+		"@types/bun": "1.3.10",
+		"typescript": "7.0.2"
+	}
+}

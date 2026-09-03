@@ -1,0 +1,85 @@
+# REZICS Chinese catalog reconciliation — 2026-09-02
+
+This public repository prepares a one-time, resumable reconciliation of REZICS Book Units whose
+complete metadata-localization language set is exactly `{zh}`. Every source and candidate is read
+from the live REZICS production database in small, bounded transactions. The workflow never
+copies the complete catalog locally, inspects the wider web, or implements production writes.
+
+The production sample that motivated the work contains query fragments and character names
+misrepresented as Books, duplicate author Entities, and incorrect attribution relationships. The
+job therefore distinguishes identity merge, reversible deletion, metadata revision, and
+uncertainty; it is not a moderation sweep.
+
+## Scope
+
+A source Book must be published, public, approved, not deleted, created before the run cutoff,
+and currently have exactly one metadata localization whose language is `zh`. A Book with a `ja`
+or any other localization is never a mutation source. It may be returned by the live candidate
+search as a protected canonical merge target.
+
+The classifier may use titles, summaries, descriptions, aliases, Book fields, timestamps, and
+credit relationships stored by REZICS. URLs are treated only as stored text and are never
+requested.
+
+## Online data flow
+
+`next` first returns any locally persisted but undecided packets. When none remain, it opens a
+short repeatable-read, read-only production transaction and:
+
+1. selects the next bounded page of exact-`zh` sources by `(created_at, id)` keyset;
+2. invokes the existing bounded REZICS text-candidate search for each source inside one batch;
+3. reads full evidence only for those sources and returned candidates;
+4. closes the transaction;
+5. atomically persists the resulting evidence packets and advances the recoverable cursor.
+
+AI work happens only after the database transaction is closed. The repository stores the finite
+packets actually considered, their hashes, decisions, checkpoints, and event logs. It does not
+create `snapshot/books.jsonl` or another complete local catalog export.
+
+## Repository roles
+
+- [`PLAN.md`](./PLAN.md) is the authoritative execution and approval plan.
+- [`docs/decision-policy.md`](./docs/decision-policy.md) defines AI outcomes and evidence rules.
+- [`docs/architecture.md`](./docs/architecture.md) explains online data flow and scaling.
+- [`docs/runbook.md`](./docs/runbook.md) contains operator commands through manifest generation.
+- [`.agents/skills/zh-catalog-reconcile/SKILL.md`](./.agents/skills/zh-catalog-reconcile/SKILL.md)
+  instructs an AI task how to continue the run safely.
+- `src/` contains deterministic online querying, packet, validation, and manifest tooling.
+- `schemas/` is generated from the runtime Zod contracts.
+- `runs/` receives ignored JSON and JSONL artifacts.
+
+## Install and verify
+
+```powershell
+bun install --frozen-lockfile
+bun run check
+```
+
+Initialize a run without connecting anywhere:
+
+```powershell
+bun run reconcile init --run rehearsal-001 --rezics-ref v1.7.0 --cutoff 2026-09-02T16:00:00.000Z
+bun run reconcile status --run rehearsal-001
+```
+
+Database commands accept either `REZICS_DATABASE_SECRET_FILE` or a dedicated
+`REZICS_DATABASE_READONLY_URL`, never both. With the secret document, the runner can reach a
+private PostgreSQL listener through a loopback-only SSH stdio bridge without exposing PostgreSQL,
+using SSH port forwarding, or changing the server. Run `bun run reconcile doctor` before a run.
+
+The monitoring profile is the default. If an operator explicitly selects the runtime profile
+because monitoring lacks catalog access, the runner requires PostgreSQL connection-startup
+`default_transaction_read_only=on` and a repeatable-read, read-only transaction for every batch.
+The live doctor proves both guards and reports whether the credential itself is privileged;
+credentials are never printed.
+
+For a model-independent bounded pilot, use
+[`prompts/1000-book-rehearsal.md`](./prompts/1000-book-rehearsal.md). The count limits durable
+source decisions. It does not trigger a full-catalog export.
+
+No command named `apply` exists in this repository.
+
+## External reference
+
+The read path follows PostgreSQL read-only transaction semantics and keyset pagination. See the
+official [PostgreSQL transaction documentation](https://www.postgresql.org/docs/current/sql-set-transaction.html).

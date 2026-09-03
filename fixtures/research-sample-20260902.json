@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"capturedFrom": "REZICS public production API",
+	"capturedOn": "2026-09-02",
+	"query": "天蚕土豆",
+	"externalMetadataRequests": 0,
+	"bookTitles": [
+		"绝世神帝萧炎萧薰儿",
+		"斗破苍穹萧炎",
+		"绫清竹",
+		"姜青娥",
+		"万相之王姜青娥的身份",
+		"万相之王李洛",
+		"天蚕土豆最新",
+		"万相之王天蚕土豆",
+		"武动乾坤林动",
+		"斗破苍穹萧炎萧薰儿",
+		"大主宰",
+		"元尊夭夭被圣族c",
+		"天蚕土豆新书灭阴阳",
+		"万相之王李洛姜青娥"
+	],
+	"observations": [
+		"Several titles are search queries, character names, or title-plus-character fragments.",
+		"The stored 大主宰 Book attribution points to 墨香铜臭 while its own stored description names 天蚕土豆.",
+		"Three person Entities matched the author name, including 天蚕土豆_qd22 and 天蚕土豆<."
+	]
+}

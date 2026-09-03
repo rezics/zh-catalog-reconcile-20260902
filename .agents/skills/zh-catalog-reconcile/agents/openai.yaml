@@ -1,0 +1,4 @@
+interface:
+  display_name: "ZH Catalog Reconcile"
+  short_description: "Safely reconcile Chinese-only REZICS books"
+  default_prompt: "Use $zh-catalog-reconcile to prepare or continue a guarded REZICS Chinese-only catalog reconciliation run."

@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.temp/
+
+# Run data stays inside the repository for resumability, but raw production
+# snapshots, decisions, and logs require an explicit review before publication.
+runs/*
+!runs/.gitkeep
+!runs/README.md
+
+# Deterministic packet-builder scratch space.
+**/.work/
+*.log
+*.tmp

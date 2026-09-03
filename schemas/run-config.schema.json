@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 80,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "cutoff": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+    },
+    "rezicsRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourcePolicy": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "book"
+        },
+        "metadataLanguagesExactly": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "zh"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "status": {
+          "type": "string",
+          "const": "published"
+        },
+        "visibility": {
+          "type": "string",
+          "const": "public"
+        },
+        "moderationStatus": {
+          "type": "string",
+          "const": "approved"
+        },
+        "deleted": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "kind",
+        "metadataLanguagesExactly",
+        "status",
+        "visibility",
+        "moderationStatus",
+        "deleted"
+      ],
+      "additionalProperties": false
+    },
+    "networkPolicy": {
+      "type": "string",
+      "const": "rezics-only-no-external-metadata"
+    },
+    "evidenceMode": {
+      "type": "string",
+      "const": "online-batched"
+    },
+    "applyState": {
+      "type": "string",
+      "const": "locked"
+    },
+    "onlineBatchSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "maxCandidatesPerPacket": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 50
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "runId",
+    "createdAt",
+    "cutoff",
+    "rezicsRef",
+    "sourcePolicy",
+    "networkPolicy",
+    "evidenceMode",
+    "applyState",
+    "onlineBatchSize",
+    "maxCandidatesPerPacket"
+  ],
+  "additionalProperties": false
+}

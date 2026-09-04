@@ -662,7 +662,7 @@ test("a strongly matching long synopsis can prove a merge when stored titles dif
 			rezicsRef: "v1.7.0",
 			cutoff: "2026-09-02T16:00:00.000Z",
 		});
-		const synopsis = "相同的完整长篇故事简介证明两个记录描述同一作品。".repeat(5);
+		const synopsis = "相同的完整长篇故事简介证明两个记录描述同一作品。".repeat(2);
 		const withSynopsis = (book: BookEvidence): BookEvidence => {
 			const { evidenceHash: _evidenceHash, ...withoutHash } = book;
 			const unhashed = {

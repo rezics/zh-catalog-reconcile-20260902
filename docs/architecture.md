@@ -53,7 +53,7 @@ then runs the unchanged validator. The near match may be one insertion, deletion
 Stored synopsis text may support a title-variant claim only
 when the text itself states the alternate title. A target title can prove the variant when it
 contains the cited source title.
-Duplicate validation also accepts a matching synopsis excerpt of at least 64 normalized
+Duplicate validation also accepts a matching synopsis excerpt of at least 32 normalized
 characters, or matching synopsis and attribution, when titles differ. Revision values may be linked to a stored identity excerpt that
 contains the replacement value, and non-Book uncertainty may retain contradictory source Book
 evidence instead of discarding it to satisfy the output shape.

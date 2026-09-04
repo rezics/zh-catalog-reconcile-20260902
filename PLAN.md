@@ -151,7 +151,7 @@ Quality gates:
 - every routine action uses typed English basis codes, each linked to compatible citations;
 - every `keep` cites a Book-like title plus synopsis, attribution, or identifier corroboration;
 - every `merge` cites a shared identifier, an explicitly stated title variant, a matching synopsis
-  excerpt of at least 64 normalized characters, matching synopsis and attribution, or title
+  excerpt of at least 32 normalized characters, matching synopsis and attribution, or title
   correspondence plus corroboration;
 - every `review` records typed uncertainties linked to source and related-candidate citations;
 - free-form notes occur only for an explicit `other` reason or uncertainty;

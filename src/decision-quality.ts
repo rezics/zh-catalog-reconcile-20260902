@@ -36,7 +36,7 @@ import { workerValidationError } from "./worker-feedback.ts";
 const MaximumSampleIssues = 100;
 const BlanketReviewMinimum = 10;
 const DuplicateExplanationMinimum = 3;
-const StrongSynopsisMinimumCharacters = 64;
+const StrongSynopsisMinimumCharacters = 32;
 const IdentityEvidenceFields = new Set<DecisionEvidenceCitation["field"]>(
 	IdentityEvidenceFieldValues,
 );

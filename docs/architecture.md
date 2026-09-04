@@ -149,7 +149,7 @@ the online design back into a complete local export to scale it.
 New runs default to 64 one-source packets per page; the current production run uses the probed
 256-source page. Initialization accepts page sizes from 1 to 256; old runs retain their persisted
 size. Guarded classification uses at most 64 of the shared 128 request slots, full decisions use groups of four,
-and no more than eight parts are active. Capture remains one short transaction at a time and is
+and no more than sixteen parts are active. Capture remains one short transaction at a time and is
 never multiplied by inference concurrency. Process memory, rate limits, capture latency, and tail
 requests still determine sustained throughput; configured parallelism is not a proportional
 speedup guarantee.

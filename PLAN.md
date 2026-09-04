@@ -1,6 +1,6 @@
 # Production reconciliation plan
 
-Status: **prepared; production reads allowed only through the guarded runner; writes not authorized**
+Status: **reconciliation complete; validated manifest generated; production writes not authorized**
 
 Owner repository: `rezics/zh-catalog-reconcile-20260902`
 
@@ -13,12 +13,17 @@ This `PLAN.md` is the repository's single authoritative work plan. The repositor
 architecture, decision policy, decision template, and runbook are supporting contracts and
 procedures; they are not separate plans.
 
-The current replacement execution is `full-online-luna-v6-20260904`: a fresh run from the
+The completed replacement execution is `full-online-luna-v6-20260904`: a fresh run from the
 beginning with REZICS reference `v1.7.0`, cutoff `2026-09-02T16:00:00.000Z`, page size 256,
-`evidence-claims-v3`, and the `full-online-luna-v6` worker protocol. It must use no source-start
-cursor and no `--after-run`. Initialize it only if that run ID does not already exist; otherwise,
-verify the persisted configuration before resuming. The exact guarded commands are maintained in
+`evidence-claims-v3`, and the `full-online-luna-v6` worker protocol. It used no source-start cursor
+and no `--after-run`. The exact guarded commands are maintained in
 [`docs/runbook.md`](./docs/runbook.md).
+
+The run discovered and decided all 136,386 exact-`{zh}` sources. The independent final audit
+passed with zero issues and zero legacy decisions: 122,735 keep, 6,492 merge, 2,451 soft-delete,
+2,587 review, and 2,121 revise. The guarded manifest contains 11,064 actions: 6,492 merge, 2,451
+soft-delete, and 2,121 revision proposals. From the persisted `createdAt` to
+`manifest.generated`, completion took 4 hours 50 minutes 36 seconds. No production write occurred.
 
 Preserve historical artifacts but never resume or use them to skip source ranges:
 
@@ -287,7 +292,7 @@ New runs persist the page size selected by `init --online-batch-size` (1–256, 
 runs keep their original size. At the default candidate limit of 20, the selected 256-source page
 requests at most `256 × (20 + 1) = 5,376` evidence Book IDs before deduplication; final packets
 contain at most 20 Books including the source. There is one database connection and a bounded
-eight-part pipeline, never an unbounded prefetch queue.
+sixteen-part pipeline, never an unbounded prefetch queue.
 Neither the worker count nor packet batching multiplies database transactions.
 
 The v6 worker first asks Luna for a compact five-way semantic classification in groups of 20. A
@@ -298,8 +303,8 @@ identifier citations. Every other, malformed, uncertain, candidate-bearing, or u
 goes through the complete v6 decision
 prompt in groups of four. Full-output validation retains valid per-source proposals and retries
 only rejected sources. Capture, triage, complete decisions, and recording overlap across at most
-eight parts, while one shared semaphore caps all model requests at 128. With a 256-source page, the
-local evidence backlog is bounded at 2,048 sources.
+sixteen parts, while one shared semaphore caps all model requests at 128. With a 256-source page,
+the active local evidence backlog is bounded at 4,096 sources, plus isolated deferred holes.
 
 Four-packet requests amortize fixed prompt and process-startup overhead. Ignoring general Codex
 configuration and project instructions avoids duplicating unrelated plugins, MCP tools, and
@@ -373,5 +378,8 @@ do not establish Fedora throughput, p95 latency, or 32-worker Luna capacity. The
 ## Completion criteria
 
 Preparation is complete when repository checks pass, the Skill validates, fixture recovery tests
-pass, and a live read-only canary creates bounded packets without a catalog export. Production
-execution is complete only after the separately authorized apply and post-run verification.
+pass, and a live read-only canary creates bounded packets without a catalog export. Reconciliation
+execution is complete when the online cursor and decisions have exact coverage, the audit passes,
+and the guarded manifest is generated; `full-online-luna-v6-20260904` satisfies these criteria.
+Production application remains a separate, explicitly authorized maintenance phase with post-run
+verification and is not implemented by this repository.
